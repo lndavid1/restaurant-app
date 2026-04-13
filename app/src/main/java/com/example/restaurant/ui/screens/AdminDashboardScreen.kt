@@ -251,9 +251,9 @@ fun AdminDashboardScreen(
                             }
                         }
                     }
-                    AdminMainHome(viewModel)
+                    AdminMainHome(token, viewModel)
                 }
-                1 -> AdminTableManager(viewModel)
+                1 -> AdminTableManager(token, viewModel)
                 2 -> AdminProductInventory(token, viewModel)
                 3 -> AdminStatsView(token, viewModel, onInvoiceListClick = { showInvoiceList = true })
                 4 -> AdminIngredientInventory(
@@ -272,11 +272,11 @@ fun AdminDashboardScreen(
 // TAB HOME: Dashboard B?n (Card Grid)
 // =====================================================
 @Composable
-fun AdminMainHome(viewModel: RestaurantViewModel) {
+fun AdminMainHome(token: String, viewModel: RestaurantViewModel) {
     val tables by viewModel.tables.collectAsState()
     val orders by viewModel.orders.collectAsState()
 
-    LaunchedEffect(Unit) { viewModel.fetchTables("") }
+    LaunchedEffect(Unit) { viewModel.fetchTables(token) }
 
     val sortedTables = remember(tables) { tables.sortedWith(compareBy({ it.table_number.filter { c -> c.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }, { it.table_number })) }
     LazyVerticalGrid(
@@ -295,14 +295,14 @@ fun AdminMainHome(viewModel: RestaurantViewModel) {
 // TAB 1: Quản lý bàn - theo m?u sketch 1
 // =====================================================
 @Composable
-fun AdminTableManager(viewModel: RestaurantViewModel) {
+fun AdminTableManager(token: String, viewModel: RestaurantViewModel) {
     val tables by viewModel.tables.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
     var selectedTable by remember { mutableStateOf<RestaurantTable?>(null) }
     var tableToDelete by remember { mutableStateOf<RestaurantTable?>(null) }
 
     LaunchedEffect(Unit) {
-        viewModel.fetchTables("")
+        viewModel.fetchTables(token)
     }
 
     if (showDialog) {
