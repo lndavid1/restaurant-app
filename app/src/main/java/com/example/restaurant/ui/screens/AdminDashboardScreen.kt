@@ -251,7 +251,7 @@ fun AdminDashboardScreen(
                             }
                         }
                     }
-                    AdminMainHome(token, viewModel)
+                    AdminMainHome(token, viewModel, modifier = Modifier.weight(1f))
                 }
                 1 -> AdminTableManager(token, viewModel)
                 2 -> AdminProductInventory(token, viewModel)
@@ -273,7 +273,7 @@ fun AdminDashboardScreen(
 // TAB HOME: Dashboard B?n (Card Grid)
 // =====================================================
 @Composable
-fun AdminMainHome(token: String, viewModel: RestaurantViewModel) {
+fun AdminMainHome(token: String, viewModel: RestaurantViewModel, modifier: Modifier = Modifier) {
     val tables by viewModel.tables.collectAsState()
     val orders by viewModel.orders.collectAsState()
 
@@ -282,6 +282,7 @@ fun AdminMainHome(token: String, viewModel: RestaurantViewModel) {
     val sortedTables = remember(tables) { tables.sortedWith(compareBy({ it.table_number.filter { c -> c.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }, { it.table_number })) }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
+        modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -385,6 +386,7 @@ fun AdminTableManager(token: String, viewModel: RestaurantViewModel) {
         val sortedTables2 = remember(tables) { tables.sortedWith(compareBy({ it.table_number.filter { c -> c.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }, { it.table_number })) }
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
+            modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(bottom = 100.dp)
@@ -2360,12 +2362,12 @@ fun AdminIngredientInventory(
         }
 
         if (filteredList.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(if (searchQuery.isBlank()) "Kho bếp trống" else "Không tìm thấy nguyên liệu", color = Color.Gray)
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(bottom = 100.dp)
             ) {
