@@ -617,16 +617,26 @@ fun TableCardView(table: RestaurantTable, orders: List<Order> = emptyList(), onC
     }
     val isCalling = table.needs_service
     val currentOrder = remember(orders, table.id) {
-        orders.find { it.table_id == table.id && (it.payment_status == "unpaid" || it.payment_status == "requested") }
+        orders.find { it.table_id == table.id && (it.payment_status == "unpaid" || it.payment_status == "requested" || it.payment_status == "cash_requested" || it.payment_status == "online_requested" || it.payment_status == "payment_approved") }
     }
 
     val (statusColor, statusLabel) = remember(isCalling, isPaymentRequested, table.status) {
         when {
             isCalling -> Pair(Color(0xFFFF9800), "🔔 Gọi phục vụ")
-            isPaymentRequested -> Pair(Color(0xFFE5A65A), "💳 Yêu cầu TT")
-            table.status == "available" -> Pair(StatusGreen, "🟢 Trống")
-            table.status == "reserved" -> Pair(StatusYellow, "🟡 Đặt trước")
-            else -> Pair(StatusRed, "🔴 Đang dùng")
+            isPaymentRequested -> Pair(Color(0xFF005BAA), "💳 Yêu cầu TT")
+            table.status == "available" -> Pair(com.example.restaurant.ui.theme.StatusGreen, "🟢 Trống")
+            table.status == "reserved" -> Pair(com.example.restaurant.ui.theme.StatusYellow, "🟡 Đặt trước")
+            else -> Pair(com.example.restaurant.ui.theme.StatusRed, "🔴 Đang dùng")
+        }
+    }
+
+    val backgroundBrush = remember(isCalling, isPaymentRequested, table.status) {
+        when {
+            isCalling -> androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFFFFF3E0), Color(0xFFFFF8E1)))
+            isPaymentRequested -> androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFFE3F2FD), Color(0xFFF3E5F5)))
+            table.status == "available" -> androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFFE8F5E9), Color(0xFFF1F8E9)))
+            table.status == "reserved" -> androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFFFFFDE7), Color(0xFFFFF3E0)))
+            else -> androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFFFFEBEE), Color(0xFFFCE4EC)))
         }
     }
 
@@ -635,75 +645,89 @@ fun TableCardView(table: RestaurantTable, orders: List<Order> = emptyList(), onC
         val infiniteTransition = rememberInfiniteTransition(label = "callBlink_${table.id}")
         infiniteTransition.animateFloat(
             initialValue = 1f, targetValue = 0.3f,
-            animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
+            animationSpec = infiniteRepeatable(androidx.compose.animation.core.tween(600, easing = androidx.compose.animation.core.LinearEasing), RepeatMode.Reverse),
             label = "callBlinkAlpha"
         ).value
     } else 1f
 
     val borderColor = when {
         isCalling -> Color.Red.copy(alpha = blinkAlpha)
-        isPaymentRequested -> Color(0xFFE5A65A)
+        isPaymentRequested -> Color(0xFF005BAA)
         else -> Color.Transparent
     }
 
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(120.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = if (isCalling) Color.Red.copy(alpha = blinkAlpha * 0.08f) else Color.White,
-        shadowElevation = if (isCalling || isPaymentRequested) 6.dp else 2.dp,
-        border = if (isCalling || isPaymentRequested) BorderStroke(2.dp, borderColor) else null
+        modifier = Modifier.fillMaxWidth().height(125.dp),
+        shape = RoundedCornerShape(20.dp),
+        shadowElevation = if (isCalling || isPaymentRequested) 8.dp else 2.dp,
+        border = if (isCalling || isPaymentRequested) BorderStroke(1.5.dp, borderColor) else null
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(14.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Top: Table number + status dot
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        Box(modifier = Modifier.fillMaxSize().background(backgroundBrush)) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    table.table_number,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF1A1A2E)
-                )
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .background(statusColor, CircleShape)
-                )
-            }
-            // Capacity
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.People, null, modifier = Modifier.size(13.dp), tint = Color.Gray)
-                Spacer(Modifier.width(4.dp))
-                Text("${table.capacity} khách", fontSize = 11.sp, color = Color.Gray)
-            }
-            // Status label + optional amount
-            Column {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = statusColor.copy(alpha = 0.13f)
+                // Top: Table number + status dot
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        statusLabel,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = statusColor,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        table.table_number,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF1A1A2E)
                     )
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White,
+                        shadowElevation = 2.dp
+                    ) {
+                        Box(modifier = Modifier.padding(6.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(statusColor, CircleShape)
+                            )
+                        }
+                    }
                 }
-                if (currentOrder != null) {
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        "${currentOrder.total_amount.toLong().toVndFormat()} VNĐ",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = WarmBrown
-                    )
+                
+                // Capacity
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.People, null, modifier = Modifier.size(14.dp), tint = Color.Gray)
+                    Spacer(Modifier.width(6.dp))
+                    Text("${table.capacity} khách", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                }
+                
+                // Status label + optional amount
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.White.copy(alpha = 0.7f)
+                    ) {
+                        Text(
+                            statusLabel,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    if (currentOrder != null) {
+                        Text(
+                            "${currentOrder.total_amount.toLong().toVndFormat()} đ",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF1A1A2E)
+                        )
+                    }
                 }
             }
         }

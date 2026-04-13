@@ -257,6 +257,7 @@ fun AdminDashboardScreen(
                 2 -> AdminProductInventory(token, viewModel)
                 3 -> AdminStatsView(token, viewModel, onInvoiceListClick = { showInvoiceList = true })
                 4 -> AdminIngredientInventory(
+                         token = token,
                          viewModel = viewModel,
                          onScanClick = { uri ->
                              ingredientScanViewModel.scanIngredientImage(uri, viewModel.ingredients.value, context)
@@ -333,85 +334,134 @@ fun AdminTableManager(token: String, viewModel: RestaurantViewModel) {
         // --- Thanh "Tổng số bàn" + "Thêm bàn" ---
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = Color.White,
-                border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.5f))
+                shadowElevation = 4.dp
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Tổng số bàn:", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                    Text("${tables.size} bàn", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = WarmBrown)
+                Box(
+                    modifier = Modifier.fillMaxSize().background(
+                        brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(Color(0xFFE8F5E9), Color(0xFFC8E6C9))
+                        )
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.TableRestaurant, null, tint = StatusGreen, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Tổng số bàn", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF2E7D32))
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text("${tables.size}", fontWeight = FontWeight.Black, fontSize = 28.sp, color = StatusGreen)
+                    }
                 }
             }
-            Button(
-                onClick = { selectedTable = null; showDialog = true },
-                modifier = Modifier.weight(1f).height(80.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = WarmBrown)
+            Surface(
+                modifier = Modifier.height(76.dp).clickable { selectedTable = null; showDialog = true },
+                shape = RoundedCornerShape(20.dp),
+                color = WarmBrown,
+                shadowElevation = 4.dp
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Add, null)
-                    Text("Thêm bàn", fontSize = 12.sp)
+                Row(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Add, null, tint = Color.White)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Thêm bàn", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
 
         // --- Grid 2 cột danh sách bàn ---
         val sortedTables2 = remember(tables) { tables.sortedWith(compareBy({ it.table_number.filter { c -> c.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }, { it.table_number })) }
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 100.dp)
         ) {
             items(sortedTables2, key = { it.id }) { table ->
+                val statusColor = when (table.status) {
+                    "available" -> StatusGreen
+                    "occupied" -> StatusRed
+                    else -> StatusYellow
+                }
+                
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().height(110.dp),
+                    shape = RoundedCornerShape(20.dp),
                     color = Color.White,
-                    border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.4f))
+                    shadowElevation = 2.dp,
+                    border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.3f))
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        // Thể hiện trạng thái bàn bằng một dải hẹp bên trái
+                        Box(modifier = Modifier.fillMaxHeight().width(6.dp).background(statusColor))
+                        
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(12.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(table.table_number, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .background(
-                                        when (table.status) {
-                                            "available" -> StatusGreen
-                                            "occupied" -> StatusRed
-                                            else -> StatusYellow
-                                        },
-                                        CircleShape
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(table.table_number, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color(0xFF1A1A2E))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = statusColor.copy(alpha = 0.1f)
+                                ) {
+                                    Text(
+                                        when (table.status) { "available" -> "Trống"; "occupied" -> "Đang dùng"; else -> "Khác" },
+                                        color = statusColor,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
-                            )
-                        }
-                        Text("Sức chứa: ${table.capacity} người", color = Color.Gray, fontSize = 12.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Row {
-                            TextButton(
-                                onClick = { selectedTable = table; showDialog = true },
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Text("Sửa", color = WarmBrown, fontSize = 12.sp)
+                                }
                             }
-                            Text(" - ", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterVertically))
-                            TextButton(
-                                onClick = { tableToDelete = table },
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(0.dp)
+                            
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.People, null, modifier = Modifier.size(12.dp), tint = Color.Gray)
+                                Spacer(Modifier.width(4.dp))
+                                Text("${table.capacity} khách", color = Color.Gray, fontSize = 11.sp)
+                            }
+                            
+                            // Nút hành động sửa/xóa dùng icon thay cho text
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Xóa", color = StatusRed, fontSize = 12.sp)
+                                Surface(
+                                    shape = CircleShape,
+                                    color = WarmBrown.copy(alpha = 0.1f),
+                                    modifier = Modifier.size(32.dp).clickable { selectedTable = table; showDialog = true }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Edit, null, tint = WarmBrown, modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = StatusRed.copy(alpha = 0.1f),
+                                    modifier = Modifier.size(32.dp).clickable { tableToDelete = table }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Delete, null, tint = StatusRed, modifier = Modifier.size(14.dp))
+                                    }
+                                }
                             }
                         }
                     }
@@ -2164,6 +2214,7 @@ fun AdminInvoiceDetailScreen(
 // =====================================================
 @Composable
 fun AdminIngredientInventory(
+    token: String,
     viewModel: RestaurantViewModel,
     onScanClick: (Uri) -> Unit
 ) {
@@ -2175,7 +2226,7 @@ fun AdminIngredientInventory(
     var searchQuery by remember { mutableStateOf("") }
 
     val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { uri: Uri? -> if (uri != null) onScanClick(uri) }
 
     LaunchedEffect(Unit) {
@@ -2219,51 +2270,90 @@ fun AdminIngredientInventory(
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        // --- Top Stats (Tương tự hình tham khảo) ---
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            val totalLowStock = ingredients.count { it.stock <= 5.0 }
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                shadowElevation = 2.dp
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Icon(androidx.compose.material.icons.Icons.Default.Inventory2, null, tint = StatusGreen, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text("${ingredients.size}", fontWeight = FontWeight.Black, fontSize = 24.sp, color = Color(0xFF1A1A2E))
+                    Spacer(Modifier.height(4.dp))
+                    Text("Tổng chủng loại", fontSize = 12.sp, color = Color.Gray)
+                }
+            }
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                shadowElevation = 2.dp
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Icon(androidx.compose.material.icons.Icons.Default.Warning, null, tint = Color(0xFFD9534F), modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text("$totalLowStock", fontWeight = FontWeight.Black, fontSize = 24.sp, color = Color(0xFFD9534F))
+                    Spacer(Modifier.height(4.dp))
+                    Text("Sắp hết hàng", fontSize = 12.sp, color = Color.Gray)
+                }
+            }
+        }
+
         // --- Tìm kiếm + Thêm NL ---
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Tìm nguyên liệu") },
+                placeholder = { Text("Tìm nguyên liệu", color = Color.Gray, fontSize = 14.sp) },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                leadingIcon = { Icon(Icons.Default.Search, null, modifier = Modifier.size(18.dp)) }
-            )
-            Button(
-                onClick = { imagePicker.launch("image/*") },
-                modifier = Modifier.height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
-            ) {
-                Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(18.dp))
-            }
-            Button(
-                onClick = { selectedIngredient = null; showDialog = true },
-                modifier = Modifier.height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = WarmBrown)
-            ) {
-                Text("Thêm")
-            }
-            Button(
-                onClick = { showClearAllConfirm = true },
-                modifier = Modifier.height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFD9534F),
-                    disabledContainerColor = Color.LightGray
+                shape = RoundedCornerShape(20.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = WarmBrown,
+                    unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f),
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color(0xFFF9F9F9)
                 ),
-                enabled = ingredients.isNotEmpty()
+                leadingIcon = { Icon(Icons.Default.Search, null, modifier = Modifier.size(20.dp), tint = Color.Gray) }
+            )
+            // Scanner AI
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFF005BAA).copy(alpha = 0.1f),
+                modifier = Modifier.size(54.dp).clickable { imagePicker.launch("image/*") }
             ) {
-                Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp))
+                Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.CameraAlt, null, tint = Color(0xFF005BAA)) }
+            }
+            // Add new
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = WarmBrown,
+                modifier = Modifier.size(54.dp).clickable { selectedIngredient = null; showDialog = true }
+            ) {
+                Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Add, null, tint = Color.White) }
+            }
+            // Delete all
+            if (ingredients.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFFD9534F).copy(alpha = 0.1f),
+                    modifier = Modifier.size(54.dp).clickable { showClearAllConfirm = true }
+                ) {
+                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Delete, null, tint = Color(0xFFD9534F)) }
+                }
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(20.dp))
 
         val filteredList = if (searchQuery.isBlank()) ingredients else {
             ingredients.filter { it.name.contains(searchQuery, ignoreCase = true) }
@@ -2276,7 +2366,7 @@ fun AdminIngredientInventory(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(bottom = 100.dp)
             ) {
                 items(filteredList, key = { it.id }) { ing ->
@@ -2297,33 +2387,54 @@ fun IngredientAdminCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val stockRatio = (ingredient.stock / 50.0).coerceIn(0.0, 1.0).toFloat() // Giả định thanh max
+    val colorStock = if (ingredient.stock <= 5.0) Color(0xFFD9534F) else if (ingredient.stock <= 20.0) Color(0xFFFF9800) else StatusGreen
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(20.dp),
         color = Color.White,
-        border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.3f))
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.2f))
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(ingredient.name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Spacer(Modifier.height(4.dp))
-                Row {
-                    Text("SL trong kho: ", color = Color.Gray, fontSize = 13.sp)
-                    val colorStock = if (ingredient.stock <= 0) Color.Red else StatusGreen
-                    Text("${ingredient.stock}", fontWeight = FontWeight.Bold, color = colorStock, fontSize = 13.sp)
-                    Text(" ${ingredient.unit}", color = Color.Gray, fontSize = 13.sp)
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(ingredient.name, fontWeight = FontWeight.Black, fontSize = 17.sp, color = Color(0xFF1A1A2E))
+                    Spacer(Modifier.height(4.dp))
+                    Text("Đơn vị: ${ingredient.unit}", color = Color.Gray, fontSize = 12.sp)
+                }
+                // Nút hành động
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(shape = CircleShape, color = Color(0xFFF5F5F5), modifier = Modifier.size(36.dp).clickable(onClick = onEdit)) {
+                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Edit, null, tint = Color.Gray, modifier = Modifier.size(16.dp)) }
+                    }
+                    Surface(shape = CircleShape, color = Color(0xFFFBE9E7), modifier = Modifier.size(36.dp).clickable(onClick = onDelete)) {
+                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Delete, null, tint = Color(0xFFD9534F), modifier = Modifier.size(16.dp)) }
+                    }
                 }
             }
-            Row {
-                IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "Sửa", tint = Color.Gray)
+            Spacer(Modifier.height(20.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Thanh tiến trình cảnh báo Min Stock (như ảnh demo)
+                Box(modifier = Modifier.weight(1f).height(6.dp).background(Color(0xFFF0F0F0), RoundedCornerShape(3.dp))) {
+                    Box(modifier = Modifier.fillMaxWidth(if(ingredient.stock <= 0) 0.05f else stockRatio).height(6.dp).background(colorStock, RoundedCornerShape(3.dp)))
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Xóa", tint = Color.Red.copy(alpha = 0.7f))
+                Spacer(Modifier.width(20.dp))
+                // Số lượng kho
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${if (ingredient.stock % 1.0 == 0.0) ingredient.stock.toInt() else ingredient.stock}",
+                        fontWeight = FontWeight.Black, fontSize = 22.sp, color = colorStock
+                    )
                 }
             }
         }
