@@ -1668,6 +1668,7 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
 fun AIAnalyticsSection(orders: List<Order>, revenues: List<DailyRevenue>) {
     val analyticsVM: AdminAnalyticsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val insightState by analyticsVM.insightState.collectAsState()
+    var isExpanded by remember { mutableStateOf(true) }
 
     // Parse JSON kết quả từ AI
     val parsedInsight = remember(insightState.content) {
@@ -1685,7 +1686,7 @@ fun AIAnalyticsSection(orders: List<Order>, revenues: List<DailyRevenue>) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Header + Nút
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().clickable { if (parsedInsight != null) isExpanded = !isExpanded },
             shape = RoundedCornerShape(20.dp),
             color = Color(0xFF1A237E)
         ) {
@@ -1704,113 +1705,130 @@ fun AIAnalyticsSection(orders: List<Order>, revenues: List<DailyRevenue>) {
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text("Phân tích AI", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
-                        Text("COO Revenue Insights · Gemini", fontSize = 11.sp, color = Color.White.copy(alpha = 0.65f))
+                        Text("COO Revenue Insights", fontSize = 11.sp, color = Color.White.copy(alpha = 0.65f))
                     }
                 }
-                Button(
-                    onClick = { analyticsVM.generateInsights(orders, revenues) },
-                    enabled = !insightState.isLoading,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFFD700),
-                        contentColor = Color(0xFF1A237E),
-                        disabledContainerColor = Color.White.copy(alpha = 0.2f)
-                    ),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    if (insightState.isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color(0xFF1A237E), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Phân tích", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (parsedInsight != null) {
+                        Icon(
+                            if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Toggle",
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(end = 12.dp).size(24.dp)
+                        )
+                    }
+                    Button(
+                        onClick = { 
+                            analyticsVM.generateInsights(orders, revenues) 
+                            isExpanded = true
+                        },
+                        enabled = !insightState.isLoading,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFFD700),
+                            contentColor = Color(0xFF1A237E),
+                            disabledContainerColor = Color.White.copy(alpha = 0.2f)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        if (insightState.isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color(0xFF1A237E), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Phân tích", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
         }
 
-        // Hiện lỗi
-        if (insightState.error != null) {
-            Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = StatusRed.copy(alpha = 0.1f)) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.ErrorOutline, null, tint = StatusRed, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(insightState.error!!, color = StatusRed, fontSize = 13.sp)
-                }
-            }
-        }
-
-        // Hiện kết quả AI dạng 3 cards
-        if (parsedInsight != null) {
-            val (summaries, patterns, actions) = parsedInsight
-
-            // Card Tóm tắt
-            if (summaries.isNotEmpty()) {
-                Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFE8F5E9)) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Summarize, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("TÓM TẮT HIỆU SUẤT", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = Color(0xFF1B5E20), letterSpacing = 0.5.sp)
-                        }
-                        summaries.forEach { s ->
-                            Row(verticalAlignment = Alignment.Top) {
-                                Text("▶", color = Color(0xFF388E3C), fontSize = 11.sp, modifier = Modifier.padding(top = 1.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(s, fontSize = 13.sp, color = Color(0xFF1B5E20), lineHeight = 18.sp)
-                            }
+        if (isExpanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Hiện lỗi
+                if (insightState.error != null) {
+                    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = StatusRed.copy(alpha = 0.1f)) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.ErrorOutline, null, tint = StatusRed, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(insightState.error!!, color = StatusRed, fontSize = 13.sp)
                         }
                     }
                 }
-            }
 
-            // Card Xu hướng
-            if (patterns.isNotEmpty()) {
-                Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFFFF3E0)) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Insights, null, tint = Color(0xFFE65100), modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("PHÁT HIỆN XU HƯỚNG", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = Color(0xFFBF360C), letterSpacing = 0.5.sp)
-                        }
-                        patterns.forEach { p ->
-                            Row(verticalAlignment = Alignment.Top) {
-                                Text("▶", color = Color(0xFFFF6D00), fontSize = 11.sp, modifier = Modifier.padding(top = 1.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(p, fontSize = 13.sp, color = Color(0xFF4E342E), lineHeight = 18.sp)
-                            }
-                        }
-                    }
-                }
-            }
+                // Hiện kết quả AI dạng 3 cards
+                if (parsedInsight != null) {
+                    val (summaries, patterns, actions) = parsedInsight
 
-            // Card Hành động
-            if (actions.isNotEmpty()) {
-                Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFE3F2FD)) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Bolt, null, tint = Color(0xFF1565C0), modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("HÀNH ĐỘNG ĐỀ XUẤT", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = Color(0xFF0D47A1), letterSpacing = 0.5.sp)
-                        }
-                        actions.forEachIndexed { i, a ->
-                            Row(verticalAlignment = Alignment.Top) {
-                                Surface(shape = CircleShape, color = Color(0xFF1565C0)) {
-                                    Text("${i+1}", modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    // Card Tóm tắt
+                    if (summaries.isNotEmpty()) {
+                        Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFE8F5E9)) {
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Summarize, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("TÓM TẮT HIỆU SUẤT", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = Color(0xFF1B5E20), letterSpacing = 0.5.sp)
                                 }
-                                Spacer(Modifier.width(8.dp))
-                                Text(a, fontSize = 13.sp, color = Color(0xFF0D47A1), lineHeight = 18.sp)
+                                summaries.forEach { s ->
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Text("▶", color = Color(0xFF388E3C), fontSize = 11.sp, modifier = Modifier.padding(top = 1.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(s, fontSize = 13.sp, color = Color(0xFF1B5E20), lineHeight = 18.sp)
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            }
-        } else if (!insightState.isLoading && insightState.content.isBlank() && insightState.error == null) {
-            // Trạng thái chưa phân tích
-            Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = Color(0xFF1A237E).copy(alpha = 0.06f)) {
-                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Nhấn \"Phân tích\" để AI đọc số liệu 7 ngày", fontSize = 13.sp, color = Color(0xFF3949AB), textAlign = TextAlign.Center)
-                    Text("và đưa ra đề xuất kinh doanh.", fontSize = 13.sp, color = Color(0xFF3949AB), textAlign = TextAlign.Center)
+
+                    // Card Xu hướng
+                    if (patterns.isNotEmpty()) {
+                        Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFFFF3E0)) {
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Insights, null, tint = Color(0xFFE65100), modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("PHÁT HIỆN XU HƯỚNG", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = Color(0xFFBF360C), letterSpacing = 0.5.sp)
+                                }
+                                patterns.forEach { p ->
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Text("▶", color = Color(0xFFFF6D00), fontSize = 11.sp, modifier = Modifier.padding(top = 1.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(p, fontSize = 13.sp, color = Color(0xFF4E342E), lineHeight = 18.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Card Hành động
+                    if (actions.isNotEmpty()) {
+                        Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFE3F2FD)) {
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Bolt, null, tint = Color(0xFF1565C0), modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("HÀNH ĐỘNG ĐỀ XUẤT", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = Color(0xFF0D47A1), letterSpacing = 0.5.sp)
+                                }
+                                actions.forEachIndexed { i, a ->
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Surface(shape = CircleShape, color = Color(0xFF1565C0)) {
+                                            Text("${i+1}", modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(a, fontSize = 13.sp, color = Color(0xFF0D47A1), lineHeight = 18.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if (!insightState.isLoading && insightState.content.isBlank() && insightState.error == null) {
+                    // Trạng thái chưa phân tích
+                    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = Color(0xFF1A237E).copy(alpha = 0.06f)) {
+                        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Nhấn \"Phân tích\" để AI đọc số liệu 7 ngày", fontSize = 13.sp, color = Color(0xFF3949AB), textAlign = TextAlign.Center)
+                            Text("và đưa ra đề xuất kinh doanh.", fontSize = 13.sp, color = Color(0xFF3949AB), textAlign = TextAlign.Center)
+                        }
+                    }
                 }
             }
         }
