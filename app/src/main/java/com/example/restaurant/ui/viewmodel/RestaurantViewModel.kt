@@ -122,6 +122,7 @@ class RestaurantViewModel : ViewModel() {
     }
 
     private var isObserving = false
+    private var currentObservingToken = ""
     private val observingJobs = mutableListOf<kotlinx.coroutines.Job>()
 
     val knownPaidIds = mutableSetOf<Int>()
@@ -131,50 +132,69 @@ class RestaurantViewModel : ViewModel() {
     val knownCompletedIds = mutableSetOf<Int>()
 
     fun startObservingData(token: String) {
-        // Hủy luồng cũ nếu đang chạy để chắc chắn cập nhật lại data bằng token mới
+        // Tránh restart observers nếu token không đổi và đang chạy bình thường
+        if (isObserving && token == currentObservingToken && observingJobs.any { it.isActive }) {
+            return
+        }
+
         observingJobs.forEach { it.cancel() }
         observingJobs.clear()
 
         isObserving = true
+        currentObservingToken = token
 
         observingJobs.add(viewModelScope.launch {
             var isFirstEmitTables = true
-            repository.observeTables(token).collect { list ->
-                if (isFirstEmitTables) {
-                    knownCallingIds.addAll(list.filter { it.needs_service }.map { it.id })
-                    isFirstEmitTables = false
+            repository.observeTables(token)
+                .distinctUntilChanged()
+                .collect { list ->
+                    if (isFirstEmitTables) {
+                        knownCallingIds.addAll(list.filter { it.needs_service }.map { it.id })
+                        isFirstEmitTables = false
+                    }
+                    _tables.value = list
                 }
-                _tables.value = list
-            }
         })
         observingJobs.add(viewModelScope.launch {
             var isFirstEmitOrders = true
-            repository.observeOrders(token).collect { list ->
-                if (isFirstEmitOrders) {
-                    knownPaidIds.addAll(list.filter { it.payment_status == "paid" }.map { it.id })
-                    knownPendingIds.addAll(list.filter { it.order_status == "pending" }.map { it.id })
-                    knownReqIds.addAll(list.filter { it.payment_status == "requested" || it.payment_status == "cash_requested" || it.payment_status == "online_requested" }.map { it.id })
-                    knownCompletedIds.addAll(list.filter { it.order_status == "completed" }.map { it.id })
-                    isFirstEmitOrders = false
+            repository.observeOrders(token)
+                .distinctUntilChanged()
+                .collect { list ->
+                    if (isFirstEmitOrders) {
+                        knownPaidIds.addAll(list.filter { it.payment_status == "paid" }.map { it.id })
+                        knownPendingIds.addAll(list.filter { it.order_status == "pending" }.map { it.id })
+                        knownReqIds.addAll(list.filter { it.payment_status == "requested" || it.payment_status == "cash_requested" || it.payment_status == "online_requested" }.map { it.id })
+                        knownCompletedIds.addAll(list.filter { it.order_status == "completed" }.map { it.id })
+                        isFirstEmitOrders = false
+                    }
+                    _orders.value = list
                 }
-                _orders.value = list
-            }
         })
         // Quan sát dữ liệu doanh thu theo ngày realtime
         observingJobs.add(viewModelScope.launch {
-            repository.observeDailyRevenue().collect { list ->
-                _dailyRevenueHistory.value = list
-            }
+            repository.observeDailyRevenue()
+                .distinctUntilChanged()
+                .collect { list ->
+                    _dailyRevenueHistory.value = list
+                }
         })
     }
 
-    // Giữ lại tên hàm rỗng để không bị lỗi build (tạm thời lấp) ở các file UI không chịu xóa lệnh fetch()
-    fun fetchTables(token: String) { startObservingData(token) }
-    fun fetchOrders(token: String) { startObservingData(token) }
+    /**
+     * fetchTables/fetchOrders: Đảm bảo observers đang chạy với token đúng.
+     * Nếu token thay đổi → restart. Nếu đang chạy → không làm gì.
+     */
+    fun fetchTables(token: String) {
+        if (token.isNotBlank()) startObservingData(token)
+    }
+    fun fetchOrders(token: String) {
+        if (token.isNotBlank()) startObservingData(token)
+    }
 
     /** Gọi khi logout để reset state và cho phép observe lại khi login mới */
     fun clearAllData() {
         isObserving = false
+        currentObservingToken = ""
         observingJobs.forEach { it.cancel() }
         observingJobs.clear()
 
@@ -289,7 +309,7 @@ class RestaurantViewModel : ViewModel() {
         viewModelScope.launch {
             if (repository.addTable(table)) {
                 _toastMessage.emit("Đã thêm bàn mới")
-                fetchTables("")
+                // Observers Firestore tự cập nhật — không cần restart
             }
         }
     }
@@ -297,7 +317,7 @@ class RestaurantViewModel : ViewModel() {
         viewModelScope.launch {
             if (repository.updateTable(table)) {
                 _toastMessage.emit("Đã cập nhật bàn")
-                fetchTables("")
+                // Observers Firestore tự cập nhật — không cần restart
             }
         }
     }
@@ -305,7 +325,7 @@ class RestaurantViewModel : ViewModel() {
         viewModelScope.launch {
             if (repository.deleteTable(id)) {
                 _toastMessage.emit("Đã xóa bàn")
-                fetchTables("")
+                // Observers Firestore tự cập nhật — không cần restart
             }
         }
     }
@@ -314,13 +334,17 @@ class RestaurantViewModel : ViewModel() {
     private var inventoryJob: kotlinx.coroutines.Job? = null
     
     fun fetchInventory() {
+        // Tránh tạo nhiều inventory observers
+        if (isObservingInventory && inventoryJob?.isActive == true) return
         inventoryJob?.cancel()
         isObservingInventory = true
         inventoryJob = viewModelScope.launch {
-                repository.observeInventory().collect { list ->
+            repository.observeInventory()
+                .distinctUntilChanged()
+                .collect { list ->
                     _ingredients.value = list
                 }
-            }
+        }
     }
     fun addIngredient(item: Ingredient) {
         viewModelScope.launch {
