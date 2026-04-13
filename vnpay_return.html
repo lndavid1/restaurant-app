@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VNPAY Return - Xử lý thanh toán</title>
+    <!-- Thêm Firebase JS SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+            background-color: #f7ede2;
+        }
+
+        .box {
+            background: white;
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .success {
+            color: #6B9B76;
+        }
+
+        .error {
+            color: #D9534F;
+        }
+
+        .loading {
+            color: #E5A65A;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="box">
+        <h2 id="statusTitle" class="loading">Đang xử lý thanh toán...</h2>
+        <p id="statusDesc">Vui lòng đợi vài giây để hệ thống nhận kết quả.</p>
+    </div>
+
+    <script>
+        // 1. Cấu hình Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyANyV3YLPanlM8ogZE96BuHud1FYrgYfrQ",
+            authDomain: "android-app-4ba50.firebaseapp.com",
+            projectId: "android-app-4ba50",
+            storageBucket: "android-app-4ba50.firebasestorage.app",
+            messagingSenderId: "685757991468",
+            appId: "1:685757991468:android:2afa749974186f58589f89"
+        };
+
+        // Khởi tạo Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // 2. Lấy tham số từ URL do VNPAY trả về
+        const urlParams = new URLSearchParams(window.location.search);
+        const orderId = urlParams.get('vnp_TxnRef');
+        const responseCode = urlParams.get('vnp_ResponseCode');
+        const secureHash = urlParams.get('vnp_SecureHash');
+
+        const titleEl = document.getElementById('statusTitle');
+        const descEl = document.getElementById('statusDesc');
+
+        if (orderId && responseCode) {
+            if (responseCode === '00') {
+                // Thanh toán thành công 
+                // Lập tức cập nhật lên Firestore
+                db.collection("orders").doc(orderId).update({
+                    payment_status: "paid"
+                }).then(() => {
+                    titleEl.className = "success";
+                    titleEl.innerText = "Thanh toán giao dịch thành công!";
+                    descEl.innerText = "Mã đơn hàng #" + orderId + " đã được xác nhận.\nNhân viên đã nhận được thông báo. Bạn có thể đóng trang này.";
+                }).catch((error) => {
+                    titleEl.className = "error";
+                    titleEl.innerText = "Lỗi cập nhật dữ liệu";
+                    descEl.innerText = "Giao dịch VNPAY thành công nhưng lỗi đồng bộ với Database: " + error.message;
+                });
+            } else {
+                // Thanh toán thất bại hoặc bị hủy
+                titleEl.className = "error";
+                titleEl.innerText = "Giao dịch thất bại / Bị hủy";
+                descEl.innerText = "Mã lỗi: " + responseCode + "\nVui lòng thử lại hoặc chọn phương thức thanh toán khác.";
+            }
+        } else {
+            titleEl.className = "error";
+            titleEl.innerText = "URL Không hợp lệ";
+            descEl.innerText = "Không tìm thấy thông tin giao dịch từ hệ thống.";
+        }
+    </script>
+
+</body>
+
+</html>

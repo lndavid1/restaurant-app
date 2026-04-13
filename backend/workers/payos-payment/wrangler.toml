@@ -1,0 +1,16 @@
+name = "payos-payment"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# KV Namespace để lưu trạng thái thanh toán (không cần Firebase Admin!)
+# Tạo bằng lệnh: npx wrangler kv:namespace create "PAYOS_STATUS"
+# Sau đó paste id trả về vào bên dưới:
+[[kv_namespaces]]
+binding = "PAYOS_STATUS"
+id      = "8725ebb58c7b4258bf1e0237ef348a2a"
+
+# Secrets (điền qua wrangler secret put):
+#   PAYOS_CLIENT_ID
+#   PAYOS_API_KEY
+#   PAYOS_CHECKSUM_KEY
+#   WORKER_BASE_URL   (vd: https://payos-payment.vmc0886165119.workers.dev)
