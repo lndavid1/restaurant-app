@@ -12,12 +12,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.LazyColumn
 import com.example.restaurant.ui.theme.CreamBG
 import com.example.restaurant.ui.theme.WarmBrown
 import com.example.restaurant.ui.theme.StatusGreen
@@ -55,6 +54,9 @@ import com.example.restaurant.ui.viewmodel.RestaurantViewModel
 import com.example.restaurant.ui.viewmodel.StockStatus
 import com.example.restaurant.ui.viewmodel.MenuScanViewModel
 import com.example.restaurant.ui.viewmodel.IngredientScanViewModel
+import com.example.restaurant.ui.viewmodel.AdminAnalyticsViewModel
+import com.example.restaurant.ui.viewmodel.AIInsightState
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.restaurant.utils.toVndFormat
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -1497,7 +1499,7 @@ fun DeleteConfirmDialog(
 }
 
 // =====================================================
-// TAB 3: Thống kê
+// TAB 3: Thống kê (layout mới + AI Analytics)
 // =====================================================
 @Composable
 fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListClick: () -> Unit) {
@@ -1513,21 +1515,13 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
     val thisMonthStr = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(Date())
 
     val todayRecord = history.find { it.date == todayStr }
-
     val todayRevenueFromOrders = orders
         .filter { it.created_at.startsWith(todayStr) && it.payment_status == "paid" }
         .sumOf { it.total_amount }
     val todayRevenue = todayRecord?.revenue ?: todayRevenueFromOrders
-
-    val paidTodayOrders = orders.filter {
-        it.created_at.startsWith(todayStr) && it.payment_status == "paid"
-    }
-
+    val paidTodayOrders = orders.filter { it.created_at.startsWith(todayStr) && it.payment_status == "paid" }
     val allTodayOrders = orders.filter { it.created_at.startsWith(todayStr) }
-
-    val monthRevenue = history
-        .filter { it.date.startsWith(thisMonthStr) }
-        .sumOf { it.revenue }
+    val monthRevenue = history.filter { it.date.startsWith(thisMonthStr) }.sumOf { it.revenue }
 
     val sortedHistory = remember(history) { history.sortedByDescending { it.date } }
     val recentHistory = history.sortedBy { it.date }.takeLast(7)
@@ -1537,59 +1531,43 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
             .fillMaxSize()
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
+        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
     ) {
-        // --- Doanh thu hôm nay ---
+        // --- KPI Cards ---
         item {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.4f))
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Doanh thu hôm nay", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "${todayRevenue.toVndFormat()} VND",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = WarmBrown
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "${paidTodayOrders.size} đơn thanh toán",
-                        fontSize = 13.sp,
-                        color = Color.Gray
-                    )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(modifier = Modifier.weight(1f), shape = RoundedCornerShape(20.dp), color = Color(0xFF5C3317)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(32.dp).background(Color.White.copy(alpha = 0.15f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) { Icon(Icons.Default.TrendingUp, null, tint = Color.White, modifier = Modifier.size(18.dp)) }
+                            Spacer(Modifier.width(8.dp))
+                            Text("Hôm nay", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text("${todayRevenue.toVndFormat()}đ", fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
+                        Spacer(Modifier.height(4.dp))
+                        Text("${paidTodayOrders.size} đơn TT • ${allTodayOrders.size} tổng", fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f))
+                    }
                 }
-            }
-        }
-
-        // --- Doanh thu tháng ---
-        item {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.4f))
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Doanh thu tháng ${thisMonthStr.takeLast(2)}/${thisMonthStr.take(4)}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "${monthRevenue.toVndFormat()} VND",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = WarmBrown
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    val monthOrderCount = history.filter { it.date.startsWith(thisMonthStr) }.sumOf { it.order_count }
-                    Text(
-                        "${monthOrderCount} đơn trong tháng",
-                        fontSize = 13.sp,
-                        color = Color.Gray
-                    )
+                Surface(modifier = Modifier.weight(1f), shape = RoundedCornerShape(20.dp), color = Color(0xFF1B5E20)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(32.dp).background(Color.White.copy(alpha = 0.15f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) { Icon(Icons.Default.CalendarMonth, null, tint = Color.White, modifier = Modifier.size(18.dp)) }
+                            Spacer(Modifier.width(8.dp))
+                            Text("Tháng ${thisMonthStr.takeLast(2)}", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text("${monthRevenue.toVndFormat()}đ", fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
+                        Spacer(Modifier.height(4.dp))
+                        val cnt = history.filter { it.date.startsWith(thisMonthStr) }.sumOf { it.order_count }
+                        Text("$cnt đơn cả tháng", fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f))
+                    }
                 }
             }
         }
@@ -1597,100 +1575,66 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
         // --- Hóa đơn hôm nay ---
         item {
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onInvoiceListClick() },
+                modifier = Modifier.fillMaxWidth().clickable { onInvoiceListClick() },
                 shape = RoundedCornerShape(16.dp),
                 color = Color.White,
                 border = BorderStroke(1.5.dp, WarmBrown.copy(alpha = 0.4f))
             ) {
                 Row(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("Hóa đơn hôm nay", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "${allTodayOrders.size} hóa đơn",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WarmBrown
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Receipt, null, tint = WarmBrown, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text("Hóa đơn hôm nay", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("${allTodayOrders.size} hóa đơn", fontSize = 12.sp, color = Color.Gray)
+                        }
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = WarmBrown, modifier = Modifier.size(28.dp))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = WarmBrown)
                 }
             }
         }
 
-        // --- Biểu đồ 7 ngày gần nhất ---
+        // --- Biểu đồ 7 ngày ---
         if (recentHistory.isNotEmpty()) {
             item {
-                Text("Doanh thu 7 ngày", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Spacer(Modifier.height(4.dp))
-                RevenueHistoryChart(recentHistory)
-            }
-        }
-
-        // --- Tiêu đề lịch sử ---
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Lịch sử doanh thu", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                TextButton(onClick = { viewModel.syncDailyRevenue() }) {
-                    Icon(
-                        Icons.Filled.Refresh,
-                        contentDescription = null,
-                        tint = WarmBrown,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("Đồng bộ", color = WarmBrown, fontSize = 13.sp)
+                Column {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Doanh thu 7 ngày gần nhất", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        TextButton(onClick = { viewModel.syncDailyRevenue() }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+                            Icon(Icons.Filled.Refresh, null, tint = WarmBrown, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Đồng bộ", color = WarmBrown, fontSize = 12.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    RevenueHistoryChart(recentHistory)
                 }
             }
         }
 
-        // --- Lịch sử từng ngày ---
+        // --- AI Analytics ---
+        item {
+            AIAnalyticsSection(orders = orders, revenues = history)
+        }
+
+        // --- Lịch sử ---
+        item { Text("Lịch sử doanh thu", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
+
         if (sortedHistory.isEmpty()) {
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Chưa có lịch sử doanh thu",
-                            color = Color.Gray,
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            "Dữ liệu sẽ xuất hiện sau khi đồng bộ hoặc có đơn thanh toán",
-                            color = Color.Gray.copy(alpha = 0.6f),
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = { viewModel.syncDailyRevenue() },
-                            border = BorderStroke(1.dp, WarmBrown)
-                        ) {
-                            Icon(
-                                Icons.Filled.Refresh,
-                                contentDescription = null,
-                                tint = WarmBrown,
-                                modifier = Modifier.size(16.dp)
-                            )
+                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Chưa có lịch sử doanh thu", color = Color.Gray, fontSize = 14.sp)
+                        Text("Dữ liệu sẽ xuất hiện sau khi đồng bộ hoặc có đơn thanh toán", color = Color.Gray.copy(alpha = 0.6f), fontSize = 12.sp, textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedButton(onClick = { viewModel.syncDailyRevenue() }, border = BorderStroke(1.dp, WarmBrown)) {
+                            Icon(Icons.Filled.Refresh, null, tint = WarmBrown, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("Đồng bộ dữ liệu từ hóa đơn", color = WarmBrown, fontSize = 13.sp)
+                            Text("Đồng bộ từ hóa đơn", color = WarmBrown, fontSize = 13.sp)
                         }
                     }
                 }
@@ -1703,30 +1647,170 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
                     color = Color.White,
                     border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.3f))
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                h.date,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            Text(
-                                "${h.order_count} đơn hàng",
-                                color = Color.Gray,
-                                fontSize = 12.sp
-                            )
+                    Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).background(WarmBrown.copy(alpha = 0.6f), CircleShape))
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(h.date, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                Text("${h.order_count} đơn hàng", color = Color.Gray, fontSize = 12.sp)
+                            }
                         }
-                        Text(
-                            "${h.revenue.toVndFormat()} đ",
-                            fontWeight = FontWeight.ExtraBold,
-                            color = WarmBrown,
-                            fontSize = 15.sp
-                        )
+                        Text("${h.revenue.toVndFormat()}đ", fontWeight = FontWeight.ExtraBold, color = WarmBrown, fontSize = 15.sp)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AIAnalyticsSection(orders: List<Order>, revenues: List<DailyRevenue>) {
+    val analyticsVM: AdminAnalyticsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val insightState by analyticsVM.insightState.collectAsState()
+
+    // Parse JSON kết quả từ AI
+    val parsedInsight = remember(insightState.content) {
+        if (insightState.content.isBlank()) null
+        else try {
+            val obj = org.json.JSONObject(insightState.content)
+            Triple(
+                (0 until (obj.optJSONArray("summary")?.length() ?: 0)).map { obj.getJSONArray("summary").getString(it) },
+                (0 until (obj.optJSONArray("patterns")?.length() ?: 0)).map { obj.getJSONArray("patterns").getString(it) },
+                (0 until (obj.optJSONArray("actions")?.length() ?: 0)).map { obj.getJSONArray("actions").getString(it) }
+            )
+        } catch (e: Exception) { null }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Header + Nút
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF1A237E)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(38.dp).background(Color.White.copy(alpha = 0.15f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, null, tint = Color(0xFFFFD700), modifier = Modifier.size(22.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("Phân tích AI", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
+                        Text("COO Revenue Insights · Gemini", fontSize = 11.sp, color = Color.White.copy(alpha = 0.65f))
+                    }
+                }
+                Button(
+                    onClick = { analyticsVM.generateInsights(orders, revenues) },
+                    enabled = !insightState.isLoading,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFFD700),
+                        contentColor = Color(0xFF1A237E),
+                        disabledContainerColor = Color.White.copy(alpha = 0.2f)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    if (insightState.isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color(0xFF1A237E), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Phân tích", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Hiện lỗi
+        if (insightState.error != null) {
+            Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = StatusRed.copy(alpha = 0.1f)) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.ErrorOutline, null, tint = StatusRed, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(insightState.error!!, color = StatusRed, fontSize = 13.sp)
+                }
+            }
+        }
+
+        // Hiện kết quả AI dạng 3 cards
+        if (parsedInsight != null) {
+            val (summaries, patterns, actions) = parsedInsight
+
+            // Card Tóm tắt
+            if (summaries.isNotEmpty()) {
+                Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFE8F5E9)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Summarize, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("TÓM TẮT HIỆU SUẤT", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = Color(0xFF1B5E20), letterSpacing = 0.5.sp)
+                        }
+                        summaries.forEach { s ->
+                            Row(verticalAlignment = Alignment.Top) {
+                                Text("▶", color = Color(0xFF388E3C), fontSize = 11.sp, modifier = Modifier.padding(top = 1.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(s, fontSize = 13.sp, color = Color(0xFF1B5E20), lineHeight = 18.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Card Xu hướng
+            if (patterns.isNotEmpty()) {
+                Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFFFF3E0)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Insights, null, tint = Color(0xFFE65100), modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("PHÁT HIỆN XU HƯỚNG", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = Color(0xFFBF360C), letterSpacing = 0.5.sp)
+                        }
+                        patterns.forEach { p ->
+                            Row(verticalAlignment = Alignment.Top) {
+                                Text("▶", color = Color(0xFFFF6D00), fontSize = 11.sp, modifier = Modifier.padding(top = 1.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(p, fontSize = 13.sp, color = Color(0xFF4E342E), lineHeight = 18.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Card Hành động
+            if (actions.isNotEmpty()) {
+                Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFE3F2FD)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Bolt, null, tint = Color(0xFF1565C0), modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("HÀNH ĐỘNG ĐỀ XUẤT", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = Color(0xFF0D47A1), letterSpacing = 0.5.sp)
+                        }
+                        actions.forEachIndexed { i, a ->
+                            Row(verticalAlignment = Alignment.Top) {
+                                Surface(shape = CircleShape, color = Color(0xFF1565C0)) {
+                                    Text("${i+1}", modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Text(a, fontSize = 13.sp, color = Color(0xFF0D47A1), lineHeight = 18.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (!insightState.isLoading && insightState.content.isBlank() && insightState.error == null) {
+            // Trạng thái chưa phân tích
+            Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = Color(0xFF1A237E).copy(alpha = 0.06f)) {
+                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Nhấn \"Phân tích\" để AI đọc số liệu 7 ngày", fontSize = 13.sp, color = Color(0xFF3949AB), textAlign = TextAlign.Center)
+                    Text("và đưa ra đề xuất kinh doanh.", fontSize = 13.sp, color = Color(0xFF3949AB), textAlign = TextAlign.Center)
                 }
             }
         }
