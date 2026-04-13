@@ -339,7 +339,7 @@ fun AdminTableManager(token: String, viewModel: RestaurantViewModel) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).height(96.dp),
                 shape = RoundedCornerShape(20.dp),
                 color = Color.White,
                 shadowElevation = 4.dp
@@ -351,7 +351,10 @@ fun AdminTableManager(token: String, viewModel: RestaurantViewModel) {
                         )
                     )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                        verticalArrangement = Arrangement.Center
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.TableRestaurant, null, tint = StatusGreen, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
@@ -363,7 +366,7 @@ fun AdminTableManager(token: String, viewModel: RestaurantViewModel) {
                 }
             }
             Surface(
-                modifier = Modifier.height(76.dp).clickable { selectedTable = null; showDialog = true },
+                modifier = Modifier.height(96.dp).clickable { selectedTable = null; showDialog = true },
                 shape = RoundedCornerShape(20.dp),
                 color = WarmBrown,
                 shadowElevation = 4.dp
