@@ -2217,6 +2217,18 @@ fun AdminInvoiceDetailScreen(
 // =====================================================
 // TAB 4: QUẢN LÝ KHO NGUYÊN LIỆU (INGREDIENT INVENTORY)
 // =====================================================
+fun getLowStockThreshold(unit: String): Double {
+    return when (unit.lowercase().trim()) {
+        "kg", "kilogram" -> 4.0
+        "lít", "lit", "l" -> 2.0
+        "quả", "qua", "hộp", "hop" -> 20.0
+        "chai" -> 2.0
+        "g", "gram", "gam" -> 4000.0
+        "ml" -> 2000.0
+        else -> 5.0
+    }
+}
+
 @Composable
 fun AdminIngredientInventory(
     token: String,
@@ -2278,7 +2290,7 @@ fun AdminIngredientInventory(
         // --- Top Stats (Tương tự hình tham khảo) ---
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            val totalLowStock = ingredients.count { it.stock <= 5.0 }
+            val totalLowStock = ingredients.count { it.stock < getLowStockThreshold(it.unit) }
             Surface(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(20.dp),
@@ -2392,8 +2404,9 @@ fun IngredientAdminCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val stockRatio = (ingredient.stock / 50.0).coerceIn(0.0, 1.0).toFloat() // Giả định thanh max
-    val colorStock = if (ingredient.stock <= 5.0) Color(0xFFD9534F) else if (ingredient.stock <= 20.0) Color(0xFFFF9800) else StatusGreen
+    val threshold = getLowStockThreshold(ingredient.unit)
+    val stockRatio = (ingredient.stock / (threshold * 5.0)).coerceIn(0.0, 1.0).toFloat() // Thanh tiến trình max = 5x threshold
+    val colorStock = if (ingredient.stock < threshold) Color(0xFFD9534F) else if (ingredient.stock < threshold * 2.5) Color(0xFFFF9800) else StatusGreen
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
