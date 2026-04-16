@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
-    id("org.jetbrains.kotlin.android") version "1.9.23"
+    alias(libs.plugins.kotlin.android)
+    id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
     id("com.google.gms.google-services")
 }
 
@@ -41,7 +42,7 @@ android {
         compose = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.11"
+        // Compose Compiler is bundled with Kotlin 2.x — no explicit version needed
     }
     packaging {
         resources {
@@ -70,12 +71,12 @@ dependencies {
     implementation(libs.coil.compose)
 
     // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:33.5.0"))
+    implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
-    implementation("com.google.firebase:firebase-vertexai")
+    implementation("com.google.firebase:firebase-ai")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation("com.google.zxing:core:3.5.3")
 

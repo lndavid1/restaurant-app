@@ -6,9 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.restaurant.data.model.DailyRevenue
 import com.example.restaurant.data.model.Order
 import com.google.firebase.Firebase
-import com.google.firebase.vertexai.type.content
-import com.google.firebase.vertexai.type.generationConfig
-import com.google.firebase.vertexai.vertexAI
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.GenerativeBackend
+import com.google.firebase.ai.type.content
+import com.google.firebase.ai.type.generationConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,7 +27,7 @@ class AdminAnalyticsViewModel(application: Application) : AndroidViewModel(appli
     private val _insightState = MutableStateFlow(AIInsightState())
     val insightState: StateFlow<AIInsightState> = _insightState.asStateFlow()
 
-    private val generativeModel = Firebase.vertexAI.generativeModel(
+    private val generativeModel = Firebase.ai(backend = GenerativeBackend.vertexAI()).generativeModel(
         modelName = "gemini-2.5-flash",
         systemInstruction = content {
             text("""

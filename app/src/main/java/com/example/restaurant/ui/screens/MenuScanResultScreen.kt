@@ -6,17 +6,23 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -59,26 +65,47 @@ fun MenuScanResultScreen(
     }
 
     Scaffold(
-        containerColor = CreamBG,
+        containerColor = Color(0xFFF7F3EE),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("Kết quả Quét Menu AI", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text("Kiểm tra và chọn món muốn lưu", fontSize = 11.sp, color = Color.Gray)
-                    }
-                },
-                navigationIcon = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            listOf(WarmBrown, WarmBrown.copy(alpha = 0.75f))
+                        )
+                    )
+                    .padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     IconButton(onClick = { scanViewModel.resetState(); onBack() }) {
-                        Icon(Icons.Default.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
-                ),
-                windowInsets = WindowInsets(0, 0, 0, 0)
-            )
+                    Spacer(Modifier.width(4.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("QUÉT MENU AI", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, letterSpacing = 2.sp)
+                        Text("Kết quả phân tích", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color.White.copy(alpha = 0.2f),
+                        modifier = Modifier.clickable { imagePicker.launch("image/*") }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.CameraAlt, null, tint = Color.White, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Quét lại", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
         }
     ) { padding ->
         when (val state = scanState) {
@@ -128,10 +155,9 @@ fun MenuScanResultScreen(
             }
 
             is MenuScanViewModel.ScanState.Success -> {
-                // Trạng thái có thể chỉnh sửa của từng item
-                var editableItems by remember(state.items) {
-                    mutableStateOf(state.items.toMutableList())
-                }
+                // Dùng SnapshotStateList để chỉ recompose đúng item thay đổi
+                val editableItems: SnapshotStateList<com.example.restaurant.data.model.ScannedMenuItem> =
+                    remember(state.items) { state.items.toMutableStateList() }
 
                 Column(
                     modifier = Modifier
@@ -180,30 +206,24 @@ fun MenuScanResultScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
-                        itemsIndexed(editableItems, key = { i, _ -> i }) { index, item ->
+                        // Dùng name làm stable key → LazyColumn tái dùng được đúng item
+                        itemsIndexed(editableItems, key = { _, item -> item.name }) { index, item ->
                             ScannedItemCard(
                                 item = item,
                                 categories = categories,
                                 ingredientsList = allIngredients,
+                                // SnapshotStateList: chỉ update đúng index, không copy toàn bộ list
                                 onToggle = {
-                                    editableItems = editableItems.toMutableList().also {
-                                        it[index] = it[index].copy(isSelected = !it[index].isSelected)
-                                    }
+                                    editableItems[index] = editableItems[index].copy(isSelected = !editableItems[index].isSelected)
                                 },
                                 onNameChange = { newName ->
-                                    editableItems = editableItems.toMutableList().also {
-                                        it[index] = it[index].copy(name = newName)
-                                    }
+                                    editableItems[index] = editableItems[index].copy(name = newName)
                                 },
                                 onPriceChange = { newPrice ->
-                                    editableItems = editableItems.toMutableList().also {
-                                        it[index] = it[index].copy(price = newPrice)
-                                    }
+                                    editableItems[index] = editableItems[index].copy(price = newPrice)
                                 },
                                 onRecipeChange = { newRecipe ->
-                                    editableItems = editableItems.toMutableList().also {
-                                        it[index] = it[index].copy(recipe = newRecipe)
-                                    }
+                                    editableItems[index] = editableItems[index].copy(recipe = newRecipe)
                                 }
                             )
                         }
@@ -232,6 +252,7 @@ fun MenuScanResultScreen(
                                                 description = scanned.description.ifBlank { null },
                                                 price = scanned.price.toDouble(),
                                                 is_available = 1,
+                                                image_url = scanned.image_url,
                                                 recipe = scanned.recipe
                                             )
                                             restaurantViewModel.addProduct(adminToken, product)
@@ -247,6 +268,7 @@ fun MenuScanResultScreen(
                                                     description = scanned.description.ifBlank { null },
                                                     price = scanned.price.toDouble(),
                                                     is_available = 1,
+                                                    image_url = scanned.image_url,
                                                     recipe = scanned.recipe
                                                 )
                                                 restaurantViewModel.addProduct(adminToken, product)
@@ -343,6 +365,86 @@ fun ScannedItemCard(
                     Surface(shape = RoundedCornerShape(6.dp), color = StatusOrange.copy(alpha = 0.12f)) {
                         Text("💰 Cần điền giá", modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                             fontSize = 10.sp, color = StatusOrange)
+                    }
+                }
+            }
+
+            // --- HÌNH ẢNH MÓN AI FETCH HOẶC FALLBACK ---
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(130.dp)
+                    .background(Color(0xFFEEEEEE), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!item.image_url.isNullOrEmpty()) {
+                    coil.compose.AsyncImage(
+                        model = item.image_url,
+                        contentDescription = "Hình món ăn",
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(10.dp))
+                    )
+                    
+                    // Badge Feedback AI
+                    Surface(
+                        shape = RoundedCornerShape(topStart = 10.dp, bottomEnd = 10.dp),
+                        color = Color(0xFF1565C0).copy(alpha = 0.9f),
+                        modifier = Modifier.align(Alignment.TopStart)
+                    ) {
+                        Text(
+                            "✨ AI Phân Tích", 
+                            color = Color.White, 
+                            fontWeight = FontWeight.Bold, 
+                            fontSize = 10.sp, 
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    // Nút đổi ảnh
+                    IconButton(
+                        onClick = { /* Tương lai: Chọn ảnh mới */ },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .size(32.dp)
+                            .background(Color.Black.copy(alpha=0.6f), androidx.compose.foundation.shape.CircleShape)
+                    ) {
+                        Icon(Icons.Default.Refresh, "Đổi ảnh", tint = Color.White, modifier = Modifier.size(18.dp))
+                    }
+
+                } else {
+                    val fallbackEmoji = when {
+                        item.category.contains("nước", true) || item.category.contains("sinh tố", true) || item.category.contains("đồ uống", true) -> "🥤"
+                        item.category.contains("cơm", true) -> "🍛"
+                        item.category.contains("bún", true) || item.category.contains("phở", true) || item.category.contains("mì", true) -> "🍜"
+                        item.category.contains("bánh", true) || item.category.contains("tráng miệng", true) -> "🍰"
+                        else -> "🍲"
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(fallbackEmoji, fontSize = 48.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Không tìm thấy ảnh chuẩn",
+                            color = Color.Gray,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(topStart = 10.dp, bottomEnd = 10.dp),
+                        color = Color.Gray.copy(alpha = 0.8f),
+                        modifier = Modifier.align(Alignment.TopStart)
+                    ) {
+                        Text(
+                            "⚠ Low Confidence", 
+                            color = Color.White, 
+                            fontWeight = FontWeight.Bold, 
+                            fontSize = 10.sp, 
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
                     }
                 }
             }
@@ -445,10 +547,14 @@ fun ScannedItemCard(
                     Text("(Kiểm tra số lượng trước khi lưu)", fontSize = 10.sp, color = Color.Gray)
                 }
                 
+                // Cache lookup map tránh O(n*m) trong loop
+                val ingredientMap = remember(ingredientsList) {
+                    ingredientsList.associateBy { it.id.toString() }
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     recipe.forEachIndexed { rIndex, rItem ->
-                        val ingName = ingredientsList.find { it.id.toString() == rItem.ingredient_id }?.name ?: "ID ${rItem.ingredient_id}"
-                        
+                        val ingName = ingredientMap[rItem.ingredient_id]?.name ?: "ID ${rItem.ingredient_id}"
+
                         var editingQuantity by remember { mutableStateOf(false) }
                         var tempQuantity by remember { mutableStateOf(rItem.quantity.toString()) }
                         

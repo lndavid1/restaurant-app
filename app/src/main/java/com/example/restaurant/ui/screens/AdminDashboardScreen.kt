@@ -1049,7 +1049,7 @@ fun ProductEditDialog(
 
     // Recipe state
     val allIngredients by viewModel.ingredients.collectAsState()
-    var recipeItems by remember { mutableStateOf(product?.recipe?.toMutableList() ?: mutableListOf()) }
+    var recipeItems = remember { mutableStateListOf<RecipeItem>().also { it.addAll(product?.recipe ?: emptyList()) } }
     var showAddRecipe by remember { mutableStateOf(false) }
     var recipeIngId by remember { mutableStateOf("") }
     var recipeQty by remember { mutableStateOf("") }
@@ -1314,7 +1314,7 @@ fun ProductEditDialog(
                                             Text("${ri.quantity} ${ri.unit}$wasteText", fontSize = 11.sp, color = Color.Gray)
                                         }
                                         IconButton(
-                                            onClick = { recipeItems = recipeItems.toMutableList().also { it.removeAt(index) } },
+                                            onClick = { recipeItems.removeAt(index) },
                                             modifier = Modifier.size(28.dp)
                                         ) {
                                             Icon(Icons.Default.Close, null, tint = Color.Red.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
@@ -1405,7 +1405,7 @@ fun ProductEditDialog(
                                                 unit = recipeUnit,
                                                 waste_percent = waste
                                             )
-                                            recipeItems = (recipeItems + newItem).toMutableList()
+                                            recipeItems.add(newItem)
                                             recipeIngId = ""; recipeQty = ""; recipeWaste = "0"
                                             showAddRecipe = false
                                         }
@@ -1453,7 +1453,7 @@ fun ProductEditDialog(
                                 is_available = 1,
                                 category_name = null,
                                 ingredients = ingredients,
-                                recipe = recipeItems.takeIf { it.isNotEmpty() }?.toList()
+                                recipe = if (recipeItems.isNotEmpty()) recipeItems.toList() else null
                             )
                         )
                     }
@@ -1957,74 +1957,194 @@ fun AdminInvoiceTodayScreen(
 
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     val todayOrders = remember(orders, today) { orders.filter { it.created_at.startsWith(today) } }
+    val totalRevenue = remember(todayOrders) { todayOrders.filter { it.payment_status == "paid" }.sumOf { it.total_amount } }
+    val paidCount = remember(todayOrders) { todayOrders.count { it.payment_status == "paid" } }
+    val unpaidCount = remember(todayOrders) { todayOrders.count { it.payment_status != "paid" } }
 
-    Scaffold(containerColor = CreamBG) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).background(CreamBG),
-            horizontalAlignment = Alignment.CenterHorizontally
+    Scaffold(containerColor = Color(0xFFF7F3EE)) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF7F3EE)),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            Spacer(Modifier.height(16.dp))
-            Text("ADMIN", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Light, letterSpacing = 4.sp)
-
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.5f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+            // ── Gradient Header ──
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                listOf(WarmBrown, WarmBrown.copy(alpha = 0.75f))
+                            ),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                        .padding(20.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.Black)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.2f),
+                            modifier = Modifier.size(40.dp).clickable { onBack() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
                         }
-                        Text("Hóa đơn hôm nay", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("HOÁ ĐƠN", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, letterSpacing = 2.sp)
+                            Text("Hôm nay · ${todayOrders.size} đơn", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Doanh thu: ${totalRevenue.toVndFormat()} VNĐ",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(todayOrders, key = { it.id }) { order ->
+            // ── Stat Cards ──
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOrderClick(order) },
+                        modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(16.dp),
                         color = Color.White,
-                        border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.4f))
+                        shadowElevation = 2.dp
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier.size(32.dp)
+                                        .background(StatusGreen.copy(alpha = 0.12f), RoundedCornerShape(10.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) { Icon(Icons.Default.CheckCircle, null, tint = StatusGreen, modifier = Modifier.size(18.dp)) }
+                                Spacer(Modifier.width(8.dp))
+                                Text("Đã thanh toán", fontSize = 12.sp, color = Color.Gray)
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Text("$paidCount đơn", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color(0xFF1E293B))
+                        }
+                    }
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White,
+                        shadowElevation = 2.dp
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier.size(32.dp)
+                                        .background(StatusYellow.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) { Icon(Icons.Default.HourglassTop, null, tint = StatusYellow, modifier = Modifier.size(18.dp)) }
+                                Spacer(Modifier.width(8.dp))
+                                Text("Chưa thanh toán", fontSize = 12.sp, color = Color.Gray)
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Text("$unpaidCount đơn", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color(0xFF1E293B))
+                        }
+                    }
+                }
+            }
+
+            // ── Label ──
+            item {
+                Text(
+                    "Danh sách hóa đơn",
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 16.sp,
+                    color = Color(0xFF1A1A2E)
+                )
+            }
+
+            // ── Invoice List ──
+            if (todayOrders.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.ReceiptLong, null, tint = Color.LightGray, modifier = Modifier.size(64.dp))
+                            Spacer(Modifier.height(12.dp))
+                            Text("Hôm nay chưa có hóa đơn nào", color = Color.Gray, fontSize = 15.sp)
+                        }
+                    }
+                }
+            } else {
+                items(todayOrders, key = { it.id }) { order ->
+                    val isPaid = order.payment_status == "paid"
+                    val statusColor = if (isPaid) StatusGreen else StatusYellow
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().clickable { onOrderClick(order) },
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White,
+                        shadowElevation = 3.dp,
+                        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.25f))
                     ) {
                         Row(
                             modifier = Modifier.padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                Text("Mã hóa đơn: #${order.id}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    "Chi tiết hóa đơn",
-                                    color = WarmBrown,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    "${order.table_number ?: "Mang về"} · ${order.total_amount.toVndFormat()} VND",
-                                    color = Color.Gray,
-                                    fontSize = 12.sp
+                            // Status dot
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .background(statusColor.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    if (isPaid) Icons.Default.CheckCircle else Icons.Default.Receipt,
+                                    null,
+                                    tint = statusColor,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.Gray)
+                            Spacer(Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("#${order.id}", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = Color(0xFF1A1A2E))
+                                    Spacer(Modifier.width(8.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = statusColor.copy(alpha = 0.12f)
+                                    ) {
+                                        Text(
+                                            if (isPaid) "Đã TT" else "Chưa TT",
+                                            color = statusColor,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "${order.table_number ?: "Mang về"}  ·  ${order.items_detail?.sumOf { it.quantity } ?: 0} món",
+                                    fontSize = 13.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    "${order.total_amount.toVndFormat()} đ",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 15.sp,
+                                    color = WarmBrown
+                                )
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray, modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
                 }
-                item { Spacer(Modifier.height(16.dp)) }
             }
+
+            item { Spacer(Modifier.height(16.dp)) }
         }
     }
 }
@@ -2041,132 +2161,244 @@ fun AdminInvoiceDetailScreen(
 ) {
     var isPaid by remember { mutableStateOf(order.payment_status == "paid") }
     var showConfirmDialog by remember { mutableStateOf(false) }
+    val statusColor = if (isPaid) StatusGreen else StatusYellow
+    val detailItems = order.items_detail ?: emptyList<OrderItemDetail>()
+    val totalQty = detailItems.sumOf { it.quantity }
 
     if (showConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
-            title = { Text("Xác Nhận Thanh Toán") },
-            text = { Text("Bạn có chắc muốn Xác nhận thanh toán hóa đơn #${order.id}?\n\nTổng tiền: ${order.total_amount.toVndFormat()} VND") },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(24.dp),
+            title = {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier.size(40.dp)
+                                .background(StatusGreen.copy(alpha = 0.1f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) { Icon(Icons.Default.CheckCircle, null, tint = StatusGreen, modifier = Modifier.size(22.dp)) }
+                        Spacer(Modifier.width(12.dp))
+                        Text("Xác nhận thanh toán", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Hóa đơn: #${order.id}", fontWeight = FontWeight.Medium)
+                    Text(
+                        "Tổng tiền: ${order.total_amount.toVndFormat()} VNĐ",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 16.sp,
+                        color = WarmBrown
+                    )
+                    Surface(color = StatusGreen.copy(alpha = 0.08f), shape = RoundedCornerShape(8.dp)) {
+                        Text(
+                            "Bàn sẽ được tự động giải phóng sau khi xác nhận.",
+                            color = StatusGreen,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+            },
             confirmButton = {
                 Button(
                     onClick = {
                         showConfirmDialog = false
                         viewModel?.checkoutOrder(token, order.id) { isPaid = true }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B9B76))
-                ) { Text("Xác Nhận") }
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Xác nhận thanh toán", fontWeight = FontWeight.Bold)
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showConfirmDialog = false }) { Text("Hủy") }
+                OutlinedButton(
+                    onClick = { showConfirmDialog = false },
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color.LightGray),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Hủy bỏ", color = Color.Gray) }
             }
         )
     }
-    Scaffold(containerColor = CreamBG) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).background(CreamBG),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(Modifier.height(16.dp))
-            Text("ADMIN", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Light, letterSpacing = 4.sp)
 
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.5f))
+    Scaffold(containerColor = Color(0xFFF7F3EE)) { padding ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF7F3EE))
+        ) {
+            // ── Gradient Header ──
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(WarmBrown, WarmBrown.copy(alpha = 0.75f))
+                        )
+                    )
+                    .padding(start = 8.dp, end = 20.dp, top = 16.dp, bottom = 20.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.Black)
-                        }
-                        Text("Mã hóa đơn: #${order.id}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
                     }
+                    Spacer(Modifier.width(4.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("HOÁ ĐƠN", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, letterSpacing = 2.sp)
+                        Text("#${order.id}  ·  ${order.table_number ?: "Mang về"}", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+                    // Payment status badge
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = when (order.payment_status) {
-                            "paid" -> StatusGreen.copy(alpha = 0.15f)
-                            else -> StatusYellow.copy(alpha = 0.15f)
-                        }
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.White.copy(alpha = if (isPaid) 0.25f else 0.15f)
                     ) {
                         Text(
-                            if (order.payment_status == "paid") "Đã TT" else "Chưa TT",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            color = if (order.payment_status == "paid") StatusGreen else StatusYellow,
+                            if (isPaid) "✓ Đã TT" else "⏳ Chưa TT",
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
                 }
             }
 
+            // ── Stat Cards ──
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White,
+                    shadowElevation = 2.dp
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Box(
+                            modifier = Modifier.size(30.dp)
+                                .background(WarmBrown.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) { Text("🍽️", fontSize = 15.sp) }
+                        Spacer(Modifier.height(8.dp))
+                        Text("$totalQty món", fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = Color(0xFF1E293B))
+                        Text("${detailItems.size} loại", fontSize = 11.sp, color = Color.Gray)
+                    }
+                }
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White,
+                    shadowElevation = 2.dp
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Box(
+                            modifier = Modifier.size(30.dp)
+                                .background(statusColor.copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) { Icon(if (isPaid) Icons.Default.CheckCircle else Icons.Default.HourglassTop, null, tint = statusColor, modifier = Modifier.size(16.dp)) }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "${order.total_amount.toVndFormat()} đ",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 16.sp,
+                            color = WarmBrown
+                        )
+                        Text(if (isPaid) "Đã thanh toán" else "Chưa thanh toán", fontSize = 11.sp, color = statusColor)
+                    }
+                }
+            }
+
+            // ── Item Table Card ──
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                shadowElevation = 2.dp
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
+                    // Table header
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(CreamBG)
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .background(
+                                brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                    listOf(Color(0xFFF7F3EE), Color.White)
+                                ),
+                                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
                     ) {
-                        Text("Tên món", fontWeight = FontWeight.Bold, modifier = Modifier.weight(2f), fontSize = 14.sp)
-                        Text("Số lượng", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, fontSize = 14.sp)
-                        Text("Thành tiền", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f), textAlign = TextAlign.End, fontSize = 14.sp)
+                        Text("Món ăn", fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(2f), fontSize = 13.sp, color = Color(0xFF1A1A2E))
+                        Text("SL", fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(0.7f), textAlign = TextAlign.Center, fontSize = 13.sp, color = Color(0xFF1A1A2E))
+                        Text("Đơn giá", fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1.3f), textAlign = TextAlign.End, fontSize = 13.sp, color = Color(0xFF1A1A2E))
                     }
-                    HorizontalDivider()
+                    HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
 
-                    val detailItems = order.items_detail ?: emptyList<OrderItemDetail>()
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         items(detailItems, key = { it.name }) { item ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(item.name, modifier = Modifier.weight(2f), fontSize = 14.sp)
+                                Text(item.name, modifier = Modifier.weight(2f), fontSize = 14.sp, color = Color(0xFF1A1A2E))
                                 Text(
-                                    "${item.quantity}",
-                                    modifier = Modifier.weight(1f),
+                                    "×${item.quantity}",
+                                    modifier = Modifier.weight(0.7f),
                                     textAlign = TextAlign.Center,
-                                    fontSize = 14.sp
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = WarmBrown
                                 )
                                 Text(
                                     "—",
-                                    modifier = Modifier.weight(1.5f),
+                                    modifier = Modifier.weight(1.3f),
                                     textAlign = TextAlign.End,
-                                    color = Color.Gray,
+                                    color = Color.LightGray,
                                     fontSize = 14.sp
                                 )
                             }
-                            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
+                            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.2f))
                         }
                     }
 
-                    HorizontalDivider()
+                    // Total footer
+                    HorizontalDivider(color = Color.LightGray.copy(alpha = 0.4f))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(CreamBG)
+                            .background(
+                                brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                    listOf(Color(0xFFF7F3EE), Color.White)
+                                )
+                            )
                             .padding(horizontal = 16.dp, vertical = 16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Tổng số tiền", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Column {
+                            Text("Tổng cộng", fontSize = 13.sp, color = Color.Gray)
+                            Text("$totalQty món · ${detailItems.size} loại", fontSize = 11.sp, color = Color.LightGray)
+                        }
                         Text(
-                            "${order.total_amount.toVndFormat()} VND",
+                            "${order.total_amount.toVndFormat()} VNĐ",
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 16.sp,
+                            fontSize = 18.sp,
                             color = WarmBrown
                         )
                     }
@@ -2175,37 +2407,36 @@ fun AdminInvoiceDetailScreen(
 
             Spacer(Modifier.height(16.dp))
 
+            // ── Action Button ──
             if (!isPaid && viewModel != null) {
                 Button(
                     onClick = { showConfirmDialog = true },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
-                        .height(52.dp),
+                        .height(56.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B9B76))
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusGreen)
                 ) {
                     Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Xác nhận thanh toán", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("Xác nhận thanh toán", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
                 }
                 Spacer(Modifier.height(16.dp))
             } else if (isPaid) {
                 Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFF6B9B76).copy(alpha = 0.1f)
+                    color = StatusGreen.copy(alpha = 0.1f)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF6B9B76), modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Đã thanh toán", color = Color(0xFF6B9B76), fontWeight = FontWeight.Bold)
+                        Icon(Icons.Default.CheckCircle, null, tint = StatusGreen, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("Đã thanh toán thành công!", color = StatusGreen, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                     }
                 }
                 Spacer(Modifier.height(16.dp))

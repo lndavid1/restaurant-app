@@ -6,10 +6,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.restaurant.data.model.Product
 import com.google.firebase.Firebase
-import com.google.firebase.vertexai.vertexAI
-import com.google.firebase.vertexai.type.content
-import com.google.firebase.vertexai.type.generationConfig
-import com.google.firebase.vertexai.GenerativeModel
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.GenerativeBackend
+import com.google.firebase.ai.type.content
+import com.google.firebase.ai.type.generationConfig
+import com.google.firebase.ai.GenerativeModel
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,7 +93,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             5. GỬI ĐƠN CHO BẾP: Khi khách hàng đã gọi xong và yêu cầu gửi/chốt đơn xuống bếp (ví dụ: "gửi đơn đi", "mang lên nhé", "lên món"), bạn HÃY chèn đánh dấu ẩn với cú pháp: [PLACE_ORDER]. Nhớ nhắc khách thư giãn chờ món trong giây lát!
         """.trimIndent()
 
-        generativeModel = Firebase.vertexAI.generativeModel(
+        generativeModel = Firebase.ai(backend = GenerativeBackend.vertexAI()).generativeModel(
             modelName = "gemini-2.5-flash",
             systemInstruction = content { 
                 text("$systemContext\nDưới đây là danh sách thực đơn:\n$menuString") 

@@ -35,7 +35,9 @@ data class ScannedMenuItem(
     val description: String = "",
     var isSelected: Boolean = true,
     var isPossibleDuplicate: Boolean = false, // true nếu trùng tên với món đã có
-    var recipe: List<RecipeItem>? = emptyList() // AI suggested recipe
+    var recipe: List<RecipeItem>? = emptyList(), // AI suggested recipe
+    val search_keyword: String = "",        // Từ khoá tiếng Anh do AI dịch để get ảnh Pexels
+    var image_url: String? = null           // URL ảnh tự động fetch từ Pexels qua Proxy
 )
 
 // Kết quả AI Scan từ hóa đơn nguyên liệu
@@ -54,7 +56,7 @@ data class Product(
     val description: String? = null,
     val price: Double = 0.0,
     val image_url: String? = null,
-    val is_available: Int = 1,
+    @get:PropertyName("is_available") @set:PropertyName("is_available") var is_available: Int = 1,
     val category_name: String? = null,
     val ingredients: String? = null,
     @get:PropertyName("is_featured") @set:PropertyName("is_featured") var is_featured: Boolean = false,

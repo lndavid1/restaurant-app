@@ -10,9 +10,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.restaurant.data.model.Ingredient
 import com.example.restaurant.data.model.ScannedIngredientItem
 import com.google.firebase.Firebase
-import com.google.firebase.vertexai.vertexAI
-import com.google.firebase.vertexai.type.content
-import com.google.firebase.vertexai.type.generationConfig
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.GenerativeBackend
+import com.google.firebase.ai.type.content
+import com.google.firebase.ai.type.generationConfig
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -172,7 +173,7 @@ class IngredientScanViewModel(application: Application) : AndroidViewModel(appli
                 }
 
                 // B2: Gọi Gemini Vision
-                val model = Firebase.vertexAI.generativeModel(
+                val model = Firebase.ai(backend = GenerativeBackend.vertexAI()).generativeModel(
                     modelName = "gemini-2.5-flash",
                     generationConfig = generationConfig {
                         temperature = 0.1f 

@@ -20,38 +20,40 @@ object SoundManager {
         _isSoundEnabled.value = enabled
     }
 
-    // 2. Chống Spam Logic (Debounce)
-    private var lastPlayedTime = 0L
+    // 2. Chống Spam Logic (Debounce theo từng loại tác vụ)
+    // Mỗi loại âm thanh có bộ đếm thời gian riêng — tránh âm này chặn âm kia
+    private val lastPlayedTimeMap = mutableMapOf<String, Long>()
     private const val DEBOUNCE_DELAY_MS = 2500L // 2.5 giây
 
     // 3. Quản lý Memory - Cache MediaPlayer instance
     private var mediaPlayer: MediaPlayer? = null
-    
+
     /**
-     * Hàm phát âm thanh cốt lõi. Có đầy đủ xử lý: 
-     * - Check isSoundEnabled 
-     * - Check Debounce
+     * Hàm phát âm thanh cốt lõi. Có đầy đủ xử lý:
+     * - Check isSoundEnabled
+     * - Check Debounce độc lập theo [soundKey] (không bị chặn giữa các tác vụ khác nhau)
      * - Cache MediaPlayer tái sử dụng
      */
     @Synchronized
-    private fun play(context: Context) {
+    private fun play(context: Context, soundKey: String) {
         if (!_isSoundEnabled.value) return
 
         val currentTime = System.currentTimeMillis()
-        if (currentTime - lastPlayedTime < DEBOUNCE_DELAY_MS) {
-            return // Đang spam (nhiều event kích cùng lúc), bỏ qua
+        val lastPlayed = lastPlayedTimeMap[soundKey] ?: 0L
+        if (currentTime - lastPlayed < DEBOUNCE_DELAY_MS) {
+            return // Cùng loại sự kiện spam liên tiếp → bỏ qua
         }
-        lastPlayedTime = currentTime
+        lastPlayedTimeMap[soundKey] = currentTime
 
         try {
             if (mediaPlayer == null) {
                 // Sử dụng âm báo mặc định của Android Notification
-                // Về sau bạn có thể đổi thành R.raw.xyz nếu có file mp3
+                // Về sau có thể đổi thành R.raw.xyz nếu có file mp3 riêng
                 val defaultUri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
                 mediaPlayer = MediaPlayer.create(context.applicationContext, defaultUri)
-                
+
                 mediaPlayer?.setOnCompletionListener {
-                    // Cố tình KHÔNG release để cache lại dùng lần sau (Tránh khởi tạo GC churn)
+                    // Cố tình KHÔNG release để cache lại dùng lần sau (Tránh GC churn)
                     // Thay vào đó chỉ tua về đầu
                     it.seekTo(0)
                 }
@@ -66,13 +68,13 @@ object SoundManager {
         }
     }
 
-    // Các hàm Helper đóng vai trò Event-Driven 
-    // Tách biệt theo Context nghiệp vụ để sau này gán file MP3 cự thể cho từng cái
-    fun playNewOrderSound(context: Context) = play(context)
-    fun playCallStaffSound(context: Context) = play(context)
-    fun playPaymentRequestSound(context: Context) = play(context)
-    fun playSuccessSound(context: Context) = play(context)
-    fun playOrderCompletedSound(context: Context) = play(context)
+    // Các hàm Helper đóng vai trò Event-Driven
+    // Mỗi hàm truyền soundKey riêng → debounce độc lập, không chặn lẫn nhau
+    fun playNewOrderSound(context: Context) = play(context, "new_order")
+    fun playCallStaffSound(context: Context) = play(context, "call_staff")
+    fun playPaymentRequestSound(context: Context) = play(context, "payment_request")
+    fun playSuccessSound(context: Context) = play(context, "success")
+    fun playOrderCompletedSound(context: Context) = play(context, "order_completed")
     
     // Giải phóng triệt để khi Destroy MainActivity
     @Synchronized
