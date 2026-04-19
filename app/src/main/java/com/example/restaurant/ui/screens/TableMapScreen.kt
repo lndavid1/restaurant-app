@@ -764,12 +764,13 @@ fun TableCardView(table: RestaurantTable, orders: List<Order> = emptyList(), onC
                     Text("${table.capacity} khách", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
                 }
                 
-                // Status label + optional amount
+                // Status label + optional amount — cùng 1 hàng, amount tự co chữ để vừa
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Badge trạng thái — không co (ưu tiên giữ nguyên)
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = Color.White.copy(alpha = 0.7f)
@@ -779,15 +780,26 @@ fun TableCardView(table: RestaurantTable, orders: List<Order> = emptyList(), onC
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = statusColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            maxLines = 1
                         )
                     }
+                    // Số tiền: tự co chữ nếu quá dài, luôn nằm trên cùng hàng với badge
                     if (currentOrder != null) {
+                        var amountFontSize by remember { mutableStateOf(13.sp) }
                         Text(
-                            "${currentOrder.total_amount.toLong().toVndFormat()} đ",
-                            fontSize = 14.sp,
+                            text = "${currentOrder.total_amount.toLong().toVndFormat()} đ",
+                            fontSize = amountFontSize,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1A1A2E)
+                            color = Color(0xFF1A1A2E),
+                            maxLines = 1,
+                            softWrap = false,
+                            onTextLayout = { result ->
+                                if (result.hasVisualOverflow && amountFontSize.value > 8f) {
+                                    amountFontSize *= 0.85f
+                                }
+                            },
+                            modifier = Modifier.padding(start = 4.dp)
                         )
                     }
                 }
