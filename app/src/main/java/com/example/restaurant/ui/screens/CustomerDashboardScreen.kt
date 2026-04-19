@@ -56,6 +56,7 @@ import android.net.Uri
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.example.restaurant.utils.toVndFormat
+import com.example.restaurant.ui.theme.premiumBackground
 
 @OptIn(
     androidx.compose.foundation.ExperimentalFoundationApi::class,
@@ -240,7 +241,7 @@ fun CustomerDashboardScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .background(CreamBG)
+                .premiumBackground()
         ) {
             when (selectedTab) {
                 0 -> HomeTab(

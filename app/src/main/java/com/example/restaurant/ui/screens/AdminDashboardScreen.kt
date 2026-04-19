@@ -58,6 +58,7 @@ import com.example.restaurant.ui.viewmodel.AdminAnalyticsViewModel
 import com.example.restaurant.ui.viewmodel.AIInsightState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.restaurant.utils.toVndFormat
+import com.example.restaurant.ui.theme.premiumBackground
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -176,7 +177,7 @@ fun AdminDashboardScreen(
         }
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).fillMaxSize().background(CreamBG)
+            modifier = Modifier.padding(padding).fillMaxSize().premiumBackground()
         ) {
             val allTables by viewModel.tables.collectAsState()
             val allOrders by viewModel.orders.collectAsState()

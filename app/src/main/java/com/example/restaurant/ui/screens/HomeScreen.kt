@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
+import com.example.restaurant.ui.theme.premiumBackground
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,8 +74,9 @@ fun HomeScreen(
         viewModel.fetchProducts()
     }
 
-    Scaffold(
-        containerColor = CreamBG,
+    Box(modifier = Modifier.fillMaxSize().premiumBackground()) {
+        Scaffold(
+            containerColor = Color.Transparent,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToChatbot,
@@ -227,6 +229,7 @@ fun HomeScreen(
                 }
             }
         }
+    }
     }
 }
 

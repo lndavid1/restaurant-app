@@ -33,6 +33,7 @@ import com.example.restaurant.ui.theme.StatusGreen
 import com.example.restaurant.ui.theme.StatusRed
 import com.example.restaurant.ui.theme.StatusYellow
 import com.example.restaurant.ui.theme.WarmBrown
+import com.example.restaurant.ui.theme.premiumBackground
 import com.example.restaurant.ui.viewmodel.RestaurantViewModel
 import com.example.restaurant.utils.toVndFormat
 import kotlinx.coroutines.delay
@@ -103,7 +104,7 @@ fun KitchenDashboardScreen(
         }
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).fillMaxSize().background(CreamBG)
+            modifier = Modifier.padding(padding).fillMaxSize().premiumBackground()
         ) {
             val orders by viewModel.orders.collectAsState()
 
