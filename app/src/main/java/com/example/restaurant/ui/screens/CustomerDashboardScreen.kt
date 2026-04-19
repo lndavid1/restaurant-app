@@ -89,46 +89,54 @@ fun CustomerDashboardScreen(
         }
     }
     
+    // WebView được khởi tạo lazy — chỉ tạo khi tab "Giới thiệu" (index 2) được mở
+    // DisposableEffect sẽ destroy đúng cách khi tab thay đổi — tránh memory leak
+    var mapWebView by remember { mutableStateOf<WebView?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val mapWebView = remember {
-        WebView(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true // Required for Google Maps
-            settings.setSupportZoom(true)
-            webViewClient = WebViewClient()
-            webChromeClient = WebChromeClient() // Helps display correctly
-            val htmlContent = """
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-                    <style>
-                        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-                        iframe { border: 0; width: 100%; height: 100%; }
-                    </style>
-                </head>
-                <body>
-                    <iframe 
-                        src="https://maps.google.com/maps?q=Tr%C6%B0%E1%BB%9Dng+%C4%90%E1%BA%A1i+h%E1%BB%8Dc+C%C3%B4ng+ngh%E1%BB%87+th%C3%B4ng+tin+v%C3%A0+Truy%E1%BB%81n+th%C3%B4ng+(ICTU),+Th%C3%A1i+Nguy%C3%AAn&t=&z=16&ie=UTF8&iwloc=&output=embed"
-                        allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade">
-                    </iframe>
-                </body>
-                </html>
-            """.trimIndent()
-            loadDataWithBaseURL("https://www.google.com", htmlContent, "text/html", "UTF-8", null)
-        }
-    }
 
-    // Giải phóng WebView khi composable bị hủy để tránh OOM crash từ Chromium renderer
-    DisposableEffect(Unit) {
+    DisposableEffect(selectedTab) {
+        if (selectedTab == 2) {
+            val wv = WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.setSupportZoom(true)
+                webViewClient = WebViewClient()
+                webChromeClient = WebChromeClient()
+                val htmlContent = """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                        <style>
+                            body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+                            iframe { border: 0; width: 100%; height: 100%; }
+                        </style>
+                    </head>
+                    <body>
+                        <iframe 
+                            src="https://maps.google.com/maps?q=Tr%C6%B0%E1%BB%9Dng+%C4%90%E1%BA%A1i+h%E1%BB%8Dc+C%C3%B4ng+ngh%E1%BB%87+th%C3%B4ng+tin+v%C3%A0+Truy%E1%BB%81n+th%C3%B4ng+(ICTU),+Th%C3%A1i+Nguy%C3%AAn&t=&z=16&ie=UTF8&iwloc=&output=embed"
+                            allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade">
+                        </iframe>
+                    </body>
+                    </html>
+                """.trimIndent()
+                loadDataWithBaseURL("https://www.google.com", htmlContent, "text/html", "UTF-8", null)
+            }
+            mapWebView = wv
+        }
         onDispose {
-            mapWebView.stopLoading()
-            mapWebView.clearHistory()
-            mapWebView.destroy()
+            // Full combo destroy — tránh RAM leak âm thầm
+            mapWebView?.apply {
+                stopLoading()
+                clearHistory()
+                removeAllViews()
+                destroy()
+            }
+            mapWebView = null
         }
     }
 
@@ -630,8 +638,9 @@ fun HomeTab(
                                             fontWeight = FontWeight.ExtraBold,
                                             color = WarmBrown
                                         )
-                                        val stockStatus = restaurantViewModel.getProductStockStatus(product)
-                                        if (stockStatus == StockStatus.OUT_OF_STOCK) {
+                                        // Dùng SSOT cached map — O(1), không recompute trong render
+                                        val stockStatus by restaurantViewModel.productStockStatusMap.collectAsState()
+                                        if (stockStatus[product.id] == StockStatus.OUT_OF_STOCK) {
                                             Spacer(Modifier.height(4.dp))
                                             Text("Hết hàng", fontSize=10.sp, color=Color.Red, fontWeight=FontWeight.Bold)
                                         }
@@ -715,9 +724,10 @@ fun HomeTab(
                                 Text("⭐ 4.8  |  🔥 Best Seller", fontSize = 11.sp, color = Color.Gray)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text("${product.price.toLong()} ₫", color = WarmBrown, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                
-                                val stockStatus = restaurantViewModel.getProductStockStatus(product)
-                                if (stockStatus == StockStatus.OUT_OF_STOCK) {
+
+                                // Dùng SSOT cached map — O(1), không recompute trong render
+                                val stockStatusMap by restaurantViewModel.productStockStatusMap.collectAsState()
+                                if (stockStatusMap[product.id] == StockStatus.OUT_OF_STOCK) {
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Surface(shape = RoundedCornerShape(6.dp), color = Color.Red.copy(alpha=0.1f)) {
                                         Text("Hết hàng", fontSize=11.sp, color=Color.Red, fontWeight=FontWeight.Bold, modifier=Modifier.padding(horizontal=8.dp, vertical=4.dp))
@@ -773,16 +783,21 @@ fun NotificationsTab(
     val orders by restaurantViewModel.orders.collectAsState()
     // Chỉ hiển thị các đơn chưa thanh toán của user này
     val myOrders = orders.filter { it.user_id == token && it.payment_status != "paid" }
-    
+
     var editingOrder by remember { mutableStateOf<com.example.restaurant.data.model.Order?>(null) }
-    
+
+    // ID-set — chỉ phát sound đúng 1 lần / order, không spam
+    val notifiedCompletedIds = remember { mutableSetOf<Int>() }
+
     LaunchedEffect(myOrders) {
-        val currentCompIds = myOrders.filter { it.order_status == "completed" }.map { it.id }.toSet()
-        val newlyComp = currentCompIds - restaurantViewModel.knownCompletedIds
-        if (newlyComp.isNotEmpty()) {
-            com.example.restaurant.utils.SoundManager.playOrderCompletedSound(context)
+        val newlyCompleted = myOrders.filter {
+            it.order_status == "completed" && it.id !in notifiedCompletedIds
         }
-        restaurantViewModel.knownCompletedIds.addAll(newlyComp)
+        if (newlyCompleted.isNotEmpty()) {
+            com.example.restaurant.utils.SoundManager.playOrderCompletedSound(context)
+            newlyCompleted.forEach { notifiedCompletedIds.add(it.id) }
+        }
+        restaurantViewModel.knownCompletedIds.addAll(newlyCompleted.map { it.id })
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
@@ -1392,7 +1407,7 @@ fun SettingsTab(token: String, authViewModel: AuthViewModel, onLogout: () -> Uni
 }
 
 @Composable
-fun AboutTab(mapWebView: WebView) {
+fun AboutTab(mapWebView: WebView?) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1467,23 +1482,41 @@ fun AboutTab(mapWebView: WebView) {
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(350.dp), // Sửa từ weight(1f) thành chiều cao cố định để scroll được
-
-            shape = RoundedCornerShape(24.dp),
-            shadowElevation = 8.dp,
-            border = BorderStroke(2.dp, Color.White)
-        ) {
-            AndroidView(
-                factory = { 
-                    mapWebView.apply {
-                        (parent as? ViewGroup)?.removeView(this)
+        if (mapWebView != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(350.dp),
+                shape = RoundedCornerShape(24.dp),
+                shadowElevation = 8.dp,
+                border = BorderStroke(2.dp, Color.White)
+            ) {
+                AndroidView(
+                    factory = {
+                        mapWebView.apply {
+                            (parent as? ViewGroup)?.removeView(this)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        } else {
+            // Placeholder khi WebView chưa load
+            Surface(
+                modifier = Modifier.fillMaxWidth().height(350.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFFF0EDE8)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Map, null, tint = WarmBrown.copy(alpha = 0.4f), modifier = Modifier.size(48.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Đang tải bản đồ...", color = Color.Gray, fontSize = 14.sp)
                     }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+                }
+            }
         }
     }
 }
+
+

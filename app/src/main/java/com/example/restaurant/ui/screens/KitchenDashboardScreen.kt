@@ -49,6 +49,7 @@ fun KitchenDashboardScreen(
     val tabs = listOf("Đơn hàng", "Nguyên liệu")
     val context = LocalContext.current
 
+    // collectLatest trong LaunchedEffect đã lifecycle-safe (tied to Composition)
     LaunchedEffect(Unit) {
         viewModel.toastMessage.collectLatest { message ->
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -444,7 +445,7 @@ fun KitchenOrderList(token: String, viewModel: RestaurantViewModel) {
                                     "pending" -> Button(
                                         onClick = {
                                             viewModel.updateOrderStatus(token, order.id, "processing")
-                                            viewModel.fetchTables(token)
+                                            // Không cần gọi fetchTables() — Firestore observer tự cập nhật
                                         },
                                         shape = RoundedCornerShape(12.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = StatusYellow)
@@ -456,7 +457,7 @@ fun KitchenOrderList(token: String, viewModel: RestaurantViewModel) {
                                     "processing" -> Button(
                                         onClick = {
                                             viewModel.updateOrderStatus(token, order.id, "completed")
-                                            viewModel.fetchTables(token)
+                                            // Không cần gọi fetchTables() — Firestore observer tự cập nhật
                                         },
                                         shape = RoundedCornerShape(12.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = StatusGreen)

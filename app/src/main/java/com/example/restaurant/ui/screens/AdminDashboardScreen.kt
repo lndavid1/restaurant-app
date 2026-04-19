@@ -80,6 +80,7 @@ fun AdminDashboardScreen(
     var showInvoiceList by remember { mutableStateOf(false) }
     var selectedOrder by remember { mutableStateOf<Order?>(null) }
 
+    // collectLatest trong LaunchedEffect đã lifecycle-safe (tied to Composition)
     LaunchedEffect(Unit) {
         viewModel.toastMessage.collectLatest { message ->
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -621,9 +622,12 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
         viewModel.fetchInventory()
     }
 
-    val filteredProducts = products.filter {
-        (selectedCategoryId == null || it.category_id == selectedCategoryId) &&
-        it.name.contains(searchQuery, ignoreCase = true)
+    // remember wrap — tránh recompute mỗi recompose
+    val filteredProducts = remember(products, searchQuery, selectedCategoryId) {
+        products.filter {
+            (selectedCategoryId == null || it.category_id == selectedCategoryId) &&
+            it.name.contains(searchQuery, ignoreCase = true)
+        }
     }
 
     if (showDialog) {

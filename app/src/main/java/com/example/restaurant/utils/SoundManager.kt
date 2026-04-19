@@ -47,15 +47,13 @@ object SoundManager {
 
         try {
             if (mediaPlayer == null) {
-                // Sử dụng âm báo mặc định của Android Notification
-                // Về sau có thể đổi thành R.raw.xyz nếu có file mp3 riêng
                 val defaultUri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
                 mediaPlayer = MediaPlayer.create(context.applicationContext, defaultUri)
 
                 mediaPlayer?.setOnCompletionListener {
-                    // Cố tình KHÔNG release để cache lại dùng lần sau (Tránh GC churn)
-                    // Thay vào đó chỉ tua về đầu
-                    it.seekTo(0)
+                    // Release sau khi ph\u00e1t xong \u2014 tr\u00e1nh audio resource leak 🎧
+                    it.release()
+                    mediaPlayer = null
                 }
             } else {
                 mediaPlayer?.seekTo(0)
@@ -63,7 +61,6 @@ object SoundManager {
             mediaPlayer?.start()
         } catch (e: Exception) {
             e.printStackTrace()
-            // Cleanup nếu xảy ra sự cố phần cứng
             release()
         }
     }

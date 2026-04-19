@@ -24,7 +24,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true      // Bật R8 optimizer — giảm APK size, tăng tốc khởi động
+            isShrinkResources = true    // Xóa resources không dùng
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

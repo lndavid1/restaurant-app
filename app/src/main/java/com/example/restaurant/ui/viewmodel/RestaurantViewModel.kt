@@ -46,6 +46,18 @@ class RestaurantViewModel : ViewModel() {
     private val _isUploading = MutableStateFlow(false)
     val isUploading: StateFlow<Boolean> = _isUploading
 
+    // ============================================================
+    // SSOT Derived State: Pre-computed stock map — reactive, O(1) lookup trong UI
+    // Auto-update khi products hoặc ingredients thay đổi — không bao giờ recompute trong render
+    // ============================================================
+    val productStockStatusMap: StateFlow<Map<Int, StockStatus>> = combine(
+        _products, _ingredients
+    ) { products, ingredients ->
+        if (ingredients.isEmpty()) return@combine emptyMap()
+        val ingMap = ingredients.associateBy { it.id.toString() }
+        products.associate { product -> product.id to calculateStockStatus(product, ingMap) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     /**
      * Upload ảnh lên Firebase Storage, trả về URL tải về hoặc null nếu lỗi.
      * Path: product_images/<timestamp>_<filename>
@@ -121,6 +133,21 @@ class RestaurantViewModel : ViewModel() {
         }
     }
 
+    private var isObservingProducts = false
+    private var productsJob: kotlinx.coroutines.Job? = null
+
+    /** SSOT: Khởi động observer sản phẩm 1 lần duy nhất cho toàn app */
+    private fun startObservingProducts() {
+        if (isObservingProducts && productsJob?.isActive == true) return
+        productsJob?.cancel()
+        isObservingProducts = true
+        productsJob = viewModelScope.launch {
+            repository.observeProducts()
+                .distinctUntilChanged()
+                .collect { list -> _products.value = list }
+        }
+    }
+
     private var isObserving = false
     private var currentObservingToken = ""
     private val observingJobs = mutableListOf<kotlinx.coroutines.Job>()
@@ -132,6 +159,9 @@ class RestaurantViewModel : ViewModel() {
     val knownCompletedIds = mutableSetOf<Int>()
 
     fun startObservingData(token: String) {
+        // Khởi động SSOT products observer nếu chưa chạy
+        startObservingProducts()
+
         // Tránh restart observers nếu token không đổi và đang chạy bình thường
         if (isObserving && token == currentObservingToken && observingJobs.any { it.isActive }) {
             return
@@ -198,6 +228,11 @@ class RestaurantViewModel : ViewModel() {
         observingJobs.forEach { it.cancel() }
         observingJobs.clear()
 
+        // Reset SSOT products observer
+        isObservingProducts = false
+        productsJob?.cancel()
+        productsJob = null
+
         isObservingInventory = false
         inventoryJob?.cancel()
         inventoryJob = null
@@ -215,10 +250,40 @@ class RestaurantViewModel : ViewModel() {
         viewModelScope.launch {
             if (repository.toggleProductFeatured(productId, isFeatured)) {
                 _toastMessage.emit(if (isFeatured) "Đã thêm vào Món nổi bật" else "Đã gỡ khỏi Món nổi bật")
-                fetchProducts()
+                // SSOT observer tự cập nhật — không cần gọi fetchProducts()
             } else {
                 _toastMessage.emit("Lỗi: Không thể cập nhật trạng thái món ăn")
             }
+        }
+    }
+
+    // ============================================================
+    // Private helper: tính stock status cho 1 sản phẩm
+    // Dùng trong combine() — không bao giờ gọi trực tiếp trong UI
+    // ============================================================
+    private fun calculateStockStatus(product: Product, ingMap: Map<String, Ingredient>): StockStatus {
+        val recipe = product.recipe
+        if (recipe.isNullOrEmpty()) return StockStatus.NO_RECIPE
+        if (ingMap.isEmpty()) return StockStatus.NO_RECIPE
+
+        var lowestPortion = Double.MAX_VALUE
+        var anyMatched = false
+
+        for (item in recipe) {
+            val ingredient = ingMap[item.ingredient_id.toString()] ?: continue
+            val normalizedStock = normalizeQuantity(ingredient.stock, ingredient.unit)
+            val normalizedNeeded = normalizeQuantity(item.quantity * (1.0 + item.waste_percent), item.unit)
+            if (normalizedNeeded > 0) {
+                lowestPortion = minOf(lowestPortion, normalizedStock / normalizedNeeded)
+                anyMatched = true
+            }
+        }
+
+        if (!anyMatched) return StockStatus.NO_RECIPE
+        return when {
+            lowestPortion <= 0 -> StockStatus.OUT_OF_STOCK
+            lowestPortion < 2  -> StockStatus.LOW_STOCK
+            else               -> StockStatus.OK
         }
     }
 
@@ -233,48 +298,17 @@ class RestaurantViewModel : ViewModel() {
         }
     }
 
-    /** Tính trạng thái tồn kho của món theo công thức recipe. */
+    /** Giữ lại cho backward compat — UI nên dùng productStockStatusMap thay thế.
+     * Tính trạng thái tồn kho của món theo công thức recipe. */
     fun getProductStockStatus(product: Product): StockStatus {
-        val recipe = product.recipe
-        if (recipe.isNullOrEmpty()) return StockStatus.NO_RECIPE
-
         val ingMap = _ingredients.value.associateBy { it.id.toString() }
-
-        // Nếu kho chưa load xong → không hiển thị cảnh báo sai
-        if (ingMap.isEmpty()) return StockStatus.NO_RECIPE
-
-        var lowestPortion = Double.MAX_VALUE
-        var anyMatched = false  // Có ít nhất 1 nguyên liệu khớp với kho
-
-        for (item in recipe) {
-            val ingredient = ingMap[item.ingredient_id.toString()]
-            // Nếu ingredient_id không tồn tại trong kho → bỏ qua (không phạt)
-            if (ingredient == null) continue
-
-            // Quy chuẩn đơn vị trước khi chia (để so sánh đúng kg và gram)
-            val normalizedStock = normalizeQuantity(ingredient.stock, ingredient.unit)
-            val normalizedNeeded = normalizeQuantity(item.quantity * (1.0 + item.waste_percent), item.unit)
-
-            if (normalizedNeeded > 0) {
-                lowestPortion = minOf(lowestPortion, normalizedStock / normalizedNeeded)
-                anyMatched = true
-            }
-        }
-
-        // Nếu không có nguyên liệu nào khớp với kho → coi như chưa định nghĩa
-        if (!anyMatched) return StockStatus.NO_RECIPE
-
-        return when {
-            lowestPortion <= 0 -> StockStatus.OUT_OF_STOCK
-            lowestPortion < 2  -> StockStatus.LOW_STOCK
-            else               -> StockStatus.OK
-        }
+        return calculateStockStatus(product, ingMap)
     }
     fun addProduct(token: String, product: Product) {
         viewModelScope.launch {
             if (repository.addProduct(product)) {
                 _toastMessage.emit("Đã thêm món mới")
-                fetchProducts()
+                // SSOT observer tự cập nhật — không cần fetchProducts()
             }
         }
     }
@@ -282,7 +316,7 @@ class RestaurantViewModel : ViewModel() {
         viewModelScope.launch {
             if (repository.updateProduct(product)) {
                 _toastMessage.emit("Đã cập nhật món ăn")
-                fetchProducts()
+                // SSOT observer tự cập nhật
             }
         }
     }
@@ -290,7 +324,7 @@ class RestaurantViewModel : ViewModel() {
         viewModelScope.launch {
             if (repository.deleteProduct(id)) {
                 _toastMessage.emit("Đã xóa món ăn")
-                fetchProducts()
+                // SSOT observer tự cập nhật
             }
         }
     }
@@ -298,7 +332,7 @@ class RestaurantViewModel : ViewModel() {
         viewModelScope.launch {
             if (repository.clearAllProducts()) {
                 _toastMessage.emit("Đã xóa toàn bộ thực đơn")
-                fetchProducts()
+                // SSOT observer tự cập nhật
             } else {
                 _toastMessage.emit("Lỗi: Không thể xóa thực đơn")
             }

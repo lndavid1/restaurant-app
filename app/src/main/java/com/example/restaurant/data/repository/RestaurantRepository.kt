@@ -6,6 +6,8 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.channels.awaitClose
 import kotlin.random.Random
@@ -15,6 +17,29 @@ import java.util.Locale
 
 class RestaurantRepository {
     private val firestore = FirebaseFirestore.getInstance()
+
+    // ========================================================
+    // SSOT: Products cache — 1 snapshot listener cho toàn app
+    // Toàn bộ internal methods dùng cache này, không gọi Firestore thêm
+    // ========================================================
+    private val _productsCache = MutableStateFlow<List<Product>>(emptyList())
+    val productsCache: StateFlow<List<Product>> = _productsCache
+
+    fun observeProducts(): Flow<List<Product>> = callbackFlow {
+        val listenerRegistration = firestore.collection("products")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val list = snapshot.toObjects(Product::class.java)
+                    _productsCache.value = list  // Cập nhật SSOT cache
+                    trySend(list)
+                }
+            }
+        awaitClose { listenerRegistration.remove() }
+    }
 
     suspend fun getCategories(): List<Category> {
         return try {
@@ -35,14 +60,22 @@ class RestaurantRepository {
         } catch (e: Exception) { emptyList() }
     }
 
+    // getProducts() giữ lại để tương thích ngược (category filter)
+    // Với no-filter call → dùng cache trực tiếp (zero Firestore read)
     suspend fun getProducts(categoryId: Int? = null): List<Product> {
+        if (categoryId == null) {
+            // Nếu cache đã có dữ liệu → trả về ngay, không fetch
+            if (_productsCache.value.isNotEmpty()) return _productsCache.value
+        }
         return try {
             val query = if (categoryId != null) {
                 firestore.collection("products").whereEqualTo("category_id", categoryId).get().await()
             } else {
                 firestore.collection("products").get().await()
             }
-            query.toObjects(Product::class.java)
+            val list = query.toObjects(Product::class.java)
+            if (categoryId == null) _productsCache.value = list  // Cập nhật cache
+            list
         } catch (e: Exception) { emptyList() }
     }
 
@@ -83,7 +116,7 @@ class RestaurantRepository {
     fun observeOrders(token: String): Flow<List<Order>> = callbackFlow {
         val listenerRegistration = firestore.collection("orders")
             .orderBy("id", com.google.firebase.firestore.Query.Direction.DESCENDING)
-            .limit(300)
+            .limit(100)  // Giảm từ 300 → 100 để giảm memory footprint
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     trySend(emptyList())
@@ -101,9 +134,8 @@ class RestaurantRepository {
 
     suspend fun createOrder(token: String, request: OrderRequest): Boolean {
         return try {
-            val productsDb = getProducts()
-            // Preload map: O(1) lookup thay vì find() N lần
-            val productMap = productsDb.associateBy { it.id }
+            // SSOT: Dùng cache thay vì fetch Firestore (zero extra read)
+            val productMap = _productsCache.value.associateBy { it.id }
 
             if (request.items.isEmpty()) {
                 if (request.table_id != 0) {
@@ -208,7 +240,8 @@ class RestaurantRepository {
     }
 
     /** Trừ kho nguyên liệu cho một đơn hàng đã hoàn thành.
-     * Sách: Preload all products 1 lần, ưu tiên recipe_snapshot, Firestore Transaction.
+     * Ưu tiên recipe_snapshot (embedded trong order item) → zero extra Firestore read.
+     * Chỉ fallback sang SSOT cache nếu snapshot null — vẫn không fetch thêm.
      */
     private suspend fun deductIngredientsForOrder(orderId: Int) {
         try {
@@ -218,10 +251,8 @@ class RestaurantRepository {
             @Suppress("UNCHECKED_CAST")
             val itemsRaw = orderDoc.get("items_detail") as? List<Map<String, Any>> ?: return
 
-            // Preload tất cả products 1 lần (1 Firestore read thay vì N reads)
-            val allProducts = firestore.collection("products").get().await()
-                .toObjects(Product::class.java)
-            val productMap = allProducts.associateBy { it.id }
+            // SSOT: Dùng cache — không fetch Firestore thêm
+            val productMap = _productsCache.value.associateBy { it.id }
 
             // Gom tất cả ingredient cần trừ (aggregate toàn bộ món trong đơn)
             val deductMap = mutableMapOf<String, Double>() // ingredient_id -> tổng lượng cần trừ
@@ -735,8 +766,8 @@ class RestaurantRepository {
 
     suspend fun updateOrderItems(orderId: Int, newItems: List<OrderItemDetail>): Boolean {
         return try {
-            // Lấy danh sách sản phẩm để nội suy giá tiền gốc theo tên
-            val productsDb = getProducts()
+            // SSOT: Dùng cache — không fetch Firestore thêm
+            val productsDb = _productsCache.value
             var newTotal = 0.0
 
             val mergedMap = mutableMapOf<String, Int>()
