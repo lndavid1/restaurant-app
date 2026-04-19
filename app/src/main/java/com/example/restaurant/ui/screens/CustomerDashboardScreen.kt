@@ -76,6 +76,7 @@ fun CustomerDashboardScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var homeClickCount by remember { mutableIntStateOf(0) }
     val orders by restaurantViewModel.orders.collectAsState()
+    val products by restaurantViewModel.products.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -785,6 +786,7 @@ fun NotificationsTab(
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val orders by restaurantViewModel.orders.collectAsState()
+    val products by restaurantViewModel.products.collectAsState()
     // Chỉ hiển thị các đơn chưa thanh toán của user này
     val myOrders = orders.filter { it.user_id == token && it.payment_status != "paid" }
 
@@ -1072,6 +1074,7 @@ fun NotificationsTab(
     if (invoiceOrder != null) {
         InvoiceBottomSheet(
             order = invoiceOrder!!,
+            products = products,
             onDismiss = { invoiceOrder = null },
             onConfirmPayment = { orderId ->
                 invoiceOrder = null
@@ -1085,6 +1088,7 @@ fun NotificationsTab(
 @Composable
 fun InvoiceBottomSheet(
     order: com.example.restaurant.data.model.Order,
+    products: List<com.example.restaurant.data.model.Product>,
     onDismiss: () -> Unit,
     onConfirmPayment: (Int) -> Unit
 ) {
@@ -1152,16 +1156,17 @@ fun InvoiceBottomSheet(
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.LightGray.copy(alpha = 0.4f))
 
                         items.forEachIndexed { idx, item ->
-                            val lineTotal = (item.price * item.quantity).toLong()
+                            val actualPrice = if (item.price > 0) item.price else products.find { it.id == item.product_id }?.price ?: 0.0
+                            val lineTotal = (actualPrice * item.quantity).toLong()
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.Top
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(item.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1A1A2E))
-                                    if (item.price > 0) {
+                                    if (actualPrice > 0) {
                                         Text(
-                                            "${item.price.toLong().toVndFormat()} đ/món",
+                                            "${actualPrice.toLong().toVndFormat()} đ/món",
                                             fontSize = 11.sp, color = Color.Gray
                                         )
                                     }
