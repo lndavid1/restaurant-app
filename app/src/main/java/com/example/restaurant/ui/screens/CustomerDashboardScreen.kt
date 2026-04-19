@@ -23,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.draw.clip
@@ -121,6 +122,16 @@ fun CustomerDashboardScreen(
             loadDataWithBaseURL("https://www.google.com", htmlContent, "text/html", "UTF-8", null)
         }
     }
+
+    // Giải phóng WebView khi composable bị hủy để tránh OOM crash từ Chromium renderer
+    DisposableEffect(Unit) {
+        onDispose {
+            mapWebView.stopLoading()
+            mapWebView.clearHistory()
+            mapWebView.destroy()
+        }
+    }
+
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -255,6 +266,9 @@ fun HomeTab(
     onNavigateToMyTable: () -> Unit,
     onLogout: () -> Unit
 ) {
+    val screenConfig = LocalConfiguration.current
+    val isCompact = screenConfig.screenWidthDp <= 360
+
     val userProfile by authViewModel.userProfile.collectAsState()
     val products by restaurantViewModel.products.collectAsState()
     val orders by restaurantViewModel.orders.collectAsState()
@@ -327,7 +341,7 @@ fun HomeTab(
                             colors = listOf(Color.White, CreamBG)
                         )
                     )
-                    .padding(horizontal = 20.dp, vertical = 24.dp)
+                    .padding(horizontal = 16.dp, vertical = if (isCompact) 16.dp else 20.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -337,16 +351,17 @@ fun HomeTab(
                     Column {
                         val name = userProfile?.get("fullName") as? String ?: "Khách hàng"
                         val firstName = name.trim().split(" ").lastOrNull() ?: name
+                        val cfg = LocalConfiguration.current
                         Text(
                             "Xin chào, $firstName 👋",
-                            fontSize = 26.sp,
+                            fontSize = if (cfg.screenWidthDp < 380) 20.sp else 24.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFF1A1A2E)
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             "Hôm nay bạn muốn dùng gì?",
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             color = Color.Gray,
                             fontWeight = FontWeight.Medium
                         )
@@ -358,7 +373,7 @@ fun HomeTab(
                         color = Color.White,
                         border = BorderStroke(2.dp, WarmBrown.copy(alpha=0.3f)),
                         shadowElevation = 8.dp,
-                        modifier = Modifier.size(54.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         if (!avatarUrl.isNullOrBlank()) {
                             coil.compose.AsyncImage(
@@ -409,12 +424,13 @@ fun HomeTab(
         if (searchQuery.isBlank() && !viewAllProducts) {
             // Promo Banner Carousel (Thiết kế tràn viền hiện đại)
             item {
+                val bannerRatio = if (isCompact) 2.8f else 2.2f
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(190.dp)
-                        .padding(horizontal = 20.dp)
-                        .clip(RoundedCornerShape(24.dp))
+                        .aspectRatio(bannerRatio)
+                        .padding(horizontal = 14.dp)
+                        .clip(RoundedCornerShape(18.dp))
                 ) {
                     if (images.isNotEmpty()) {
                         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
@@ -428,13 +444,13 @@ fun HomeTab(
                     } else {
                         Box(modifier = Modifier.fillMaxSize().background(Color(0xFFE0E0E0)))
                     }
-                    // Gradient overlay chuẩn
+                    // Gradient overlay
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
                                 brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                                    colors = listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = 0.75f))
                                 )
                             )
                     )
@@ -442,41 +458,41 @@ fun HomeTab(
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .padding(20.dp)
+                            .padding(14.dp)
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(10.dp),
                             color = Color(0xFFFF5252).copy(alpha = 0.9f)
                         ) {
                             Text(
                                 "Mã Ưu Đãi: BIGSALE🔥",
                                 color = Color.White,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
                         Text(
                             "Giảm 20% cho đơn hàng đầu tiên!",
                             color = Color.White,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 17.sp
+                            fontSize = 14.sp
                         )
                     }
-                    // Dot indicators nổi
+                    // Dot indicators
                     if (images.size > 1) {
                         Row(
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
-                                .padding(16.dp),
+                                .padding(12.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             repeat(images.size) { i ->
                                 val isSelected = pagerState.currentPage == i
                                 Box(
                                     modifier = Modifier
-                                        .size(if (isSelected) 18.dp else 6.dp, 6.dp)
+                                        .size(if (isSelected) 16.dp else 5.dp, 5.dp)
                                         .clip(CircleShape)
                                         .background(if (isSelected) Color.White else Color.White.copy(alpha=0.4f))
                                 )
@@ -484,14 +500,14 @@ fun HomeTab(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(20.dp))
             }
 
             // Action Buttons Row (Dạng thiếp đổ bóng sang trọng)
             item {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     ActionCircleBtn(
                         title = "Đặt bàn", 
@@ -518,7 +534,7 @@ fun HomeTab(
                         onClick = onNavigateToTakeaway
                     )
                 }
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
 
@@ -550,74 +566,74 @@ fun HomeTab(
             item {
                 val hotProducts = remember(products) { products.filter { it.is_featured } }
                 if (hotProducts.isNotEmpty()) {
+                    val cfg3 = LocalConfiguration.current
+                    val cardWidth = (cfg3.screenWidthDp * 0.42f).dp.coerceIn(140.dp, 200.dp)
+                    val imgHeight = (cardWidth.value * 0.72f).dp.coerceIn(100.dp, 150.dp)
                     LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(horizontal = 20.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
                     ) {
                         items(hotProducts, key = { it.id }) { product ->
                             Surface(
                                 modifier = Modifier
-                                    .width(180.dp)
+                                    .width(cardWidth)
                                     .clickable { showProductDialog = product },
-                                shape = RoundedCornerShape(24.dp),
+                                shape = RoundedCornerShape(20.dp),
                                 color = Color.White,
-                                shadowElevation = 12.dp
+                                shadowElevation = 10.dp
                             ) {
-                                Column(modifier = Modifier.padding(bottom = 12.dp)) {
+                                Column(modifier = Modifier.padding(bottom = 10.dp)) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(140.dp)
+                                            .height(imgHeight)
                                     ) {
                                         if (!product.image_url.isNullOrEmpty()) {
                                             AsyncImage(
                                                 model = product.image_url,
                                                 contentDescription = product.name,
                                                 contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                                             )
                                         } else {
                                             Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF0EDE8)), contentAlignment = Alignment.Center) {
-                                                Icon(Icons.Default.Fastfood, null, tint = WarmBrown.copy(alpha=0.5f), modifier = Modifier.size(50.dp))
+                                                Icon(Icons.Default.Fastfood, null, tint = WarmBrown.copy(alpha=0.5f), modifier = Modifier.size(40.dp))
                                             }
                                         }
-                                        
-                                        // Thẻ Đánh giá nằm nổi chèn lên ảnh
                                         Surface(
-                                            modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
-                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                                            shape = RoundedCornerShape(10.dp),
                                             color = Color.White.copy(alpha = 0.9f)
                                         ) {
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                                             ) {
-                                                Icon(Icons.Default.Star, null, tint = Color(0xFFFFB300), modifier = Modifier.size(14.dp))
-                                                Spacer(Modifier.width(4.dp))
-                                                Text("4.8", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                                Icon(Icons.Default.Star, null, tint = Color(0xFFFFB300), modifier = Modifier.size(12.dp))
+                                                Spacer(Modifier.width(3.dp))
+                                                Text("4.8", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                             }
                                         }
                                     }
-                                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                                         Text(
                                             product.name,
-                                            fontSize = 15.sp,
+                                            fontSize = 13.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             maxLines = 1,
                                             color = Color(0xFF1A1A2E)
                                         )
-                                        Spacer(Modifier.height(8.dp))
+                                        Spacer(Modifier.height(4.dp))
                                         Text(
                                             "${product.price.toLong()} ₫",
-                                            fontSize = 16.sp,
+                                            fontSize = 13.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = WarmBrown
                                         )
-                                        
                                         val stockStatus = restaurantViewModel.getProductStockStatus(product)
                                         if (stockStatus == StockStatus.OUT_OF_STOCK) {
-                                            Spacer(Modifier.height(6.dp))
-                                            Text("Hết hàng", fontSize=11.sp, color=Color.Red, fontWeight=FontWeight.Bold)
+                                            Spacer(Modifier.height(4.dp))
+                                            Text("Hết hàng", fontSize=10.sp, color=Color.Red, fontWeight=FontWeight.Bold)
                                         }
                                     }
                                 }
@@ -684,12 +700,12 @@ fun HomeTab(
                                 AsyncImage(
                                     model = product.image_url,
                                     contentDescription = product.name,
-                                    modifier = Modifier.size(80.dp).clip(RoundedCornerShape(16.dp)),
+                                    modifier = Modifier.size(70.dp).clip(RoundedCornerShape(14.dp)),
                                     contentScale = ContentScale.Crop
                                 )
                             } else {
-                                Box(modifier = Modifier.size(80.dp).background(Color(0xFFF0EDE8), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Fastfood, null, tint = WarmBrown.copy(alpha=0.5f), modifier = Modifier.size(30.dp))
+                                Box(modifier = Modifier.size(70.dp).background(Color(0xFFF0EDE8), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Fastfood, null, tint = WarmBrown.copy(alpha=0.5f), modifier = Modifier.size(26.dp))
                                 }
                             }
                             Spacer(modifier = Modifier.width(16.dp))
@@ -719,11 +735,15 @@ fun HomeTab(
 
 @Composable
 fun ActionCircleBtn(title: String, icon: ImageVector, onClick: () -> Unit, gradientColors: List<Color>, iconTint: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(86.dp)) {
+    val cfg = LocalConfiguration.current
+    val btnSize = (cfg.screenWidthDp * 0.17f).dp.coerceIn(54.dp, 76.dp)
+    val iconSize = (btnSize.value * 0.44f).dp
+    val labelFontSize = if (cfg.screenWidthDp < 380) 11.sp else 12.sp
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(btnSize + 14.dp)) {
         Surface(
-            modifier = Modifier.size(72.dp).clickable { onClick() },
-            shape = RoundedCornerShape(24.dp), // Squircle shape
-            shadowElevation = 8.dp,
+            modifier = Modifier.size(btnSize).clickable { onClick() },
+            shape = RoundedCornerShape(20.dp),
+            shadowElevation = 6.dp,
             color = Color.Transparent
         ) {
             Box(
@@ -732,11 +752,11 @@ fun ActionCircleBtn(title: String, icon: ImageVector, onClick: () -> Unit, gradi
                     .background(androidx.compose.ui.graphics.Brush.linearGradient(colors = gradientColors)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = title, tint = iconTint, modifier = Modifier.size(32.dp))
+                Icon(icon, contentDescription = title, tint = iconTint, modifier = Modifier.size(iconSize))
             }
         }
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(title, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(title, fontSize = labelFontSize, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 
@@ -765,10 +785,10 @@ fun NotificationsTab(
         restaurantViewModel.knownCompletedIds.addAll(newlyComp)
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)
-                                            .padding(top = 24.dp, bottom = 100.dp)) { // spacing dư cho bottom bar
-        Text("Thông tin Đơn hàng", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
-        Spacer(modifier = Modifier.height(20.dp))
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
+                                            .padding(top = 20.dp, bottom = 100.dp)) {
+        Text("Thông tin Đơn hàng", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
+        Spacer(modifier = Modifier.height(16.dp))
 
         if (myOrders.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1376,6 +1396,7 @@ fun AboutTab(mapWebView: WebView) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState()) // Thêm vuốt dọc cho màn hình nhỏ
             .padding(horizontal = 20.dp)
             .padding(top = 24.dp, bottom = 100.dp)
     ) {
@@ -1397,7 +1418,7 @@ fun AboutTab(mapWebView: WebView) {
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
                     Text("DEV: Vũ Minh Chuyên", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = WarmBrown)
-                    Text("MSSV: CNTTK21D", fontSize = 14.sp, color = Color.DarkGray, fontWeight = FontWeight.Bold)
+                    Text("Class: CNTTK21D", fontSize = 14.sp, color = Color.DarkGray, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Row(verticalAlignment = Alignment.Top) {
@@ -1449,7 +1470,8 @@ fun AboutTab(mapWebView: WebView) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .height(350.dp), // Sửa từ weight(1f) thành chiều cao cố định để scroll được
+
             shape = RoundedCornerShape(24.dp),
             shadowElevation = 8.dp,
             border = BorderStroke(2.dp, Color.White)

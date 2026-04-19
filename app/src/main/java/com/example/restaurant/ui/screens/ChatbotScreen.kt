@@ -46,7 +46,8 @@ fun ChatbotScreen(
     restaurantViewModel: RestaurantViewModel,
     authViewModel: AuthViewModel,
     chatViewModel: ChatViewModel = viewModel(),
-    token: String? = null
+    token: String? = null,
+    currentTableId: Int = 0 // Thêm tham số currentTableId để check trạng thái tức thời
 ) {
     val userProfile by authViewModel.userProfile.collectAsState()
     val avatarUrl = userProfile?.get("avatarUrl") as? String
@@ -57,13 +58,16 @@ fun ChatbotScreen(
     val listState = rememberLazyListState()
     val context = LocalContext.current
 
-    val activeTableId = remember(orders, token) {
-        if (token == null) 0
+    val activeTableId = remember(orders, token, currentTableId) {
+        val foundTable = if (token == null) 0
         else orders.find { 
             it.user_id == token && 
             it.table_id != null && it.table_id != 0 &&
             (it.payment_status == "unpaid" || it.payment_status == "requested")
         }?.table_id ?: 0
+        
+        // Nếu Firestore chưa kịp đồng bộ order trống, ưu tiên lấy currentTableId (nếu khác 0)
+        if (foundTable != 0) foundTable else currentTableId
     }
 
     val hasActiveTable = activeTableId != 0

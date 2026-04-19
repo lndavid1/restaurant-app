@@ -56,7 +56,13 @@ data class Product(
     val description: String? = null,
     val price: Double = 0.0,
     val image_url: String? = null,
-    @get:PropertyName("is_available") @set:PropertyName("is_available") var is_available: Int = 1,
+    @get:PropertyName("is_available") @set:PropertyName("is_available")
+    @get:JvmName("getIsAvailable") @set:JvmName("setIsAvailable")
+    var is_available: Int = 1,
+    // Ánh xạ thêm field "_available" (có dấu gạch dưới đầu) từ Firestore để tránh warning spam
+    @get:PropertyName("_available") @set:PropertyName("_available")
+    @get:JvmName("get_available") @set:JvmName("set_available")
+    var _available: Int = 1,
     val category_name: String? = null,
     val ingredients: String? = null,
     @get:PropertyName("is_featured") @set:PropertyName("is_featured") var is_featured: Boolean = false,

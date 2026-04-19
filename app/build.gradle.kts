@@ -79,6 +79,7 @@ dependencies {
     implementation("com.google.firebase:firebase-ai")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation("com.google.zxing:core:3.5.3")
+    debugImplementation("com.google.firebase:firebase-appcheck-debug") // App Check debug provider
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

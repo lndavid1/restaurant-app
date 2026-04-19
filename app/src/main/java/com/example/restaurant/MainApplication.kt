@@ -7,11 +7,18 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import com.google.firebase.FirebaseApp
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 
 class MainApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         FirebaseApp.initializeApp(this)
+        // Cài App Check để firebase-ai không warning 'No AppCheckProvider installed'
+        // DebugAppCheckProviderFactory chỉ dùng cho debug build — release cần Play Integrity
+        FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+            DebugAppCheckProviderFactory.getInstance()
+        )
     }
 
     override fun newImageLoader(): ImageLoader {

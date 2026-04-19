@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -117,8 +118,8 @@ fun HomeScreen(
                                 Spacer(Modifier.width(12.dp))
                             }
                             Column {
-                                Text(tableName, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, color = Color.White)
-                                Text("Khám phá thực đơn hấp dẫn", fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f))
+                                Text(tableName, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = Color.White)
+                                Text("Khám phá thực đơn hấp dẫn", fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f))
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -241,13 +242,16 @@ fun ProductCustomerItem(
     var showDetail by remember { mutableStateOf(false) }
     if (showDetail) { ProductDetailDialog(product = product, onDismiss = { showDetail = false }) }
 
+    val config = LocalConfiguration.current
+    val imgSize = (config.screenWidthDp * 0.22f).dp.coerceIn(72.dp, 100.dp)
+
     Surface(
         modifier = Modifier.fillMaxWidth().clickable { showDetail = true },
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         color = Color.White,
         shadowElevation = 6.dp
     ) {
-        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             // Image with Hot badge overlay
             Box {
                 if (!product.image_url.isNullOrEmpty()) {
@@ -255,46 +259,46 @@ fun ProductCustomerItem(
                         model = product.image_url,
                         contentDescription = product.name,
                         modifier = Modifier
-                            .size(100.dp)
-                            .clip(RoundedCornerShape(16.dp)),
+                            .size(imgSize)
+                            .clip(RoundedCornerShape(14.dp)),
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    Box(modifier = Modifier.size(100.dp).background(Color(0xFFF0EDE8), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Fastfood, null, tint = WarmBrown.copy(alpha=0.5f), modifier = Modifier.size(40.dp))
+                    Box(modifier = Modifier.size(imgSize).background(Color(0xFFF0EDE8), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Fastfood, null, tint = WarmBrown.copy(alpha=0.5f), modifier = Modifier.size(imgSize * 0.4f))
                     }
                 }
                 if (isHot) {
                     Surface(
-                        modifier = Modifier.align(Alignment.TopStart).padding(4.dp),
-                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.align(Alignment.TopStart).padding(3.dp),
+                        shape = RoundedCornerShape(6.dp),
                         color = Color(0xFFFF4757),
                         shadowElevation = 2.dp
                     ) {
-                        Text("🔥 Hot", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        Text("🔥", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
                     }
                 }
             }
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(product.name, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color(0xFF1A1A2E))
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("${product.price.toVndFormat()} ₫", color = WarmBrown, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                Text(product.name, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = Color(0xFF1A1A2E), maxLines = 2)
+                Spacer(modifier = Modifier.height(3.dp))
+                Text("${product.price.toVndFormat()} ₫", color = WarmBrown, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
                 
                 if (!product.description.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Text(product.description ?: "", style = MaterialTheme.typography.bodySmall, maxLines = 1, color = Color.Gray)
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 
                 // Badge Tình trạng kho
                 if (stockStatus == StockStatus.OUT_OF_STOCK) {
                     Surface(shape = RoundedCornerShape(6.dp), color = Color.Red.copy(alpha=0.1f)) {
-                        Text("Hết hàng tạm thời", fontSize=12.sp, color=Color.Red, fontWeight=FontWeight.Bold, modifier=Modifier.padding(horizontal=8.dp, vertical=4.dp))
+                        Text("Hết hàng", fontSize=11.sp, color=Color.Red, fontWeight=FontWeight.Bold, modifier=Modifier.padding(horizontal=6.dp, vertical=3.dp))
                     }
                 } else if (stockStatus == StockStatus.LOW_STOCK) {
                     Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFFE5A65A).copy(alpha=0.1f)) {
-                        Text("Sắp hết", fontSize=12.sp, color=Color(0xFFE5A65A), fontWeight=FontWeight.Bold, modifier=Modifier.padding(horizontal=8.dp, vertical=4.dp))
+                        Text("Sắp hết", fontSize=11.sp, color=Color(0xFFE5A65A), fontWeight=FontWeight.Bold, modifier=Modifier.padding(horizontal=6.dp, vertical=3.dp))
                     }
                 }
             }
@@ -307,12 +311,12 @@ fun ProductCustomerItem(
                         border = BorderStroke(1.dp, WarmBrown.copy(alpha=0.2f))
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
-                                Text("-", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = WarmBrown)
+                            IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+                                Text("-", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = WarmBrown)
                             }
-                            Text(quantity.toString(), fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 4.dp))
-                            IconButton(onClick = onAdd, modifier = Modifier.size(36.dp)) {
-                                Text("+", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = WarmBrown)
+                            Text(quantity.toString(), fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 3.dp))
+                            IconButton(onClick = onAdd, modifier = Modifier.size(32.dp)) {
+                                Text("+", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = WarmBrown)
                             }
                         }
                     }
@@ -320,11 +324,11 @@ fun ProductCustomerItem(
                     Surface(
                         shape = CircleShape,
                         color = WarmBrown,
-                        modifier = Modifier.size(40.dp).clickable { onAdd() },
+                        modifier = Modifier.size(36.dp).clickable { onAdd() },
                         shadowElevation = 2.dp
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White, modifier = Modifier.size(24.dp))
+                            Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -355,12 +359,13 @@ fun ProductDetailDialog(product: Product, onDismiss: () -> Unit) {
                         contentDescription = product.name,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(180.dp)
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(16.dp))
                             .background(Color(0xFFF5F5F5), RoundedCornerShape(16.dp))
                             .border(1.dp, Color.LightGray.copy(alpha=0.5f), RoundedCornerShape(16.dp)),
                         contentScale = ContentScale.Crop
                     )
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(12.dp))
                 }
                 Text(text = product.name, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
                 Spacer(Modifier.height(8.dp))

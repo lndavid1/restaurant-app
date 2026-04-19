@@ -27,6 +27,7 @@ import androidx.compose.ui.layout.ContentScale
 import com.example.restaurant.R
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import android.content.Context
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.restaurant.ui.theme.CreamBG
@@ -69,15 +70,20 @@ fun LoginScreen(
             ),
         contentAlignment = Alignment.Center
     ) {
+        val config = LocalConfiguration.current
+        val isSmall = config.screenWidthDp < 380
+        val logoSize = (config.screenWidthDp * 0.22f).dp.coerceIn(72.dp, 100.dp)
+        val hPadding = if (isSmall) 20.dp else 28.dp
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 28.dp, vertical = 32.dp),
+                .padding(horizontal = hPadding, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Brand Logo
-            Surface(shape = CircleShape, color = Color.White, modifier = Modifier.size(88.dp)) {
+            Surface(shape = CircleShape, color = Color.White, modifier = Modifier.size(logoSize)) {
                 Image(
                     painter = painterResource(id = R.drawable.app_logo),
                     contentDescription = null,
@@ -85,11 +91,11 @@ fun LoginScreen(
                     contentScale = ContentScale.Crop
                 )
             }
-            Spacer(Modifier.height(16.dp))
-            Text("Restaurant", fontWeight = FontWeight.ExtraBold, fontSize = 28.sp, color = Color.White, letterSpacing = 1.sp)
-            Text("ICTU", fontSize = 13.sp, color = Color.White.copy(alpha = 0.75f), modifier = Modifier.padding(top = 4.dp))
+            Spacer(Modifier.height(12.dp))
+            Text("Restaurant", fontWeight = FontWeight.ExtraBold, fontSize = if (isSmall) 22.sp else 26.sp, color = Color.White, letterSpacing = 1.sp)
+            Text("ICTU", fontSize = 12.sp, color = Color.White.copy(alpha = 0.75f), modifier = Modifier.padding(top = 3.dp))
 
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(28.dp))
 
             // Form Card
             Surface(

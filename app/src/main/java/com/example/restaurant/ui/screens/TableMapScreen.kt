@@ -590,7 +590,7 @@ fun EmployeeTableMapTab(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Stat card helper - dùng defaultMinSize thay vì height cố định
+                    // Stat card helper - tự động điều chỉnh cỡ chữ cho vừa trong vòng 1 dòng
                     @Composable fun StatCard(label: String, value: String, bg: Color) {
                         Surface(
                             modifier = Modifier.weight(1f).defaultMinSize(minHeight = 76.dp),
@@ -598,11 +598,37 @@ fun EmployeeTableMapTab(
                             color = bg
                         ) {
                             Column(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp)
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
                             ) {
-                                Text(label, fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.Medium, lineHeight = 13.sp)
+                                var labelSize by remember { mutableStateOf(11.sp) }
+                                Text(
+                                    text = label, 
+                                    fontSize = labelSize, 
+                                    color = Color.White.copy(alpha = 0.85f), 
+                                    fontWeight = FontWeight.Medium, 
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    onTextLayout = { result ->
+                                        if (result.hasVisualOverflow && labelSize.value > 6f) {
+                                            labelSize *= 0.9f
+                                        }
+                                    }
+                                )
                                 Spacer(Modifier.height(6.dp))
-                                Text(value, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                var valSize by remember { mutableStateOf(26.sp) }
+                                Text(
+                                    text = value, 
+                                    fontSize = valSize, 
+                                    fontWeight = FontWeight.ExtraBold, 
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    onTextLayout = { result ->
+                                        if (result.hasVisualOverflow && valSize.value > 14f) {
+                                            valSize *= 0.9f
+                                        }
+                                    }
+                                )
                             }
                         }
                     }

@@ -126,6 +126,7 @@ fun RestaurantApp() {
                 if (tableId != 0) {
                     userToken?.let { restaurantViewModel.releaseTableIfEmpty(it, tableId) }
                 }
+                currentTableId = 0
                 navController.popBackStack()
             }
             
@@ -147,6 +148,7 @@ fun RestaurantApp() {
                         if (tableId != 0) {
                             restaurantViewModel.releaseTableIfEmpty(token, tableId)
                         }
+                        currentTableId = 0
                         restaurantViewModel.clearAllData()
                         userToken = null
                         currentUserRole = null
@@ -163,6 +165,7 @@ fun RestaurantApp() {
                     tableId = currentTableId,
                     onNavigateBack = { navController.popBackStack() },
                     onOrderSuccess = {
+                        currentTableId = 0
                         if (currentUserRole == "employee") {
                             navController.navigate(Screen.TableMap.route) { popUpTo(Screen.TableMap.route) { inclusive = true } }
                         } else {
@@ -240,7 +243,8 @@ fun RestaurantApp() {
                 onNavigateBack = { navController.popBackStack() },
                 restaurantViewModel = restaurantViewModel,
                 authViewModel = authViewModel,
-                token = userToken
+                token = userToken,
+                currentTableId = currentTableId
             )
         }
     }
