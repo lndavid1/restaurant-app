@@ -48,7 +48,8 @@ class RestaurantViewModel : ViewModel() {
 
     // ============================================================
     // SSOT Derived State: Pre-computed stock map — reactive, O(1) lookup trong UI
-    // Auto-update khi products hoặc ingredients thay đổi — không bao giờ recompute trong render
+    // flowOn(Default): chạy trên background thread — KHÔNG block main thread
+    // Đây là fix cho crash "Channel unrecoverably broken" (ANR)
     // ============================================================
     val productStockStatusMap: StateFlow<Map<Int, StockStatus>> = combine(
         _products, _ingredients
@@ -56,7 +57,9 @@ class RestaurantViewModel : ViewModel() {
         if (ingredients.isEmpty()) return@combine emptyMap()
         val ingMap = ingredients.associateBy { it.id.toString() }
         products.associate { product -> product.id to calculateStockStatus(product, ingMap) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    }
+    .flowOn(kotlinx.coroutines.Dispatchers.Default)  // ← critical: off main thread
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     /**
      * Upload ảnh lên Firebase Storage, trả về URL tải về hoặc null nếu lỗi.
@@ -144,6 +147,7 @@ class RestaurantViewModel : ViewModel() {
         productsJob = viewModelScope.launch {
             repository.observeProducts()
                 .distinctUntilChanged()
+                .flowOn(kotlinx.coroutines.Dispatchers.Default)  // parse objects off main thread
                 .collect { list -> _products.value = list }
         }
     }
@@ -177,6 +181,7 @@ class RestaurantViewModel : ViewModel() {
             var isFirstEmitTables = true
             repository.observeTables(token)
                 .distinctUntilChanged()
+                .flowOn(kotlinx.coroutines.Dispatchers.Default)  // Firestore parse off main thread
                 .collect { list ->
                     if (isFirstEmitTables) {
                         knownCallingIds.addAll(list.filter { it.needs_service }.map { it.id })
@@ -189,6 +194,7 @@ class RestaurantViewModel : ViewModel() {
             var isFirstEmitOrders = true
             repository.observeOrders(token)
                 .distinctUntilChanged()
+                .flowOn(kotlinx.coroutines.Dispatchers.Default)  // Firestore parse off main thread
                 .collect { list ->
                     if (isFirstEmitOrders) {
                         knownPaidIds.addAll(list.filter { it.payment_status == "paid" }.map { it.id })
@@ -204,6 +210,7 @@ class RestaurantViewModel : ViewModel() {
         observingJobs.add(viewModelScope.launch {
             repository.observeDailyRevenue()
                 .distinctUntilChanged()
+                .flowOn(kotlinx.coroutines.Dispatchers.Default)  // Firestore parse off main thread
                 .collect { list ->
                     _dailyRevenueHistory.value = list
                 }
@@ -375,6 +382,7 @@ class RestaurantViewModel : ViewModel() {
         inventoryJob = viewModelScope.launch {
             repository.observeInventory()
                 .distinctUntilChanged()
+                .flowOn(kotlinx.coroutines.Dispatchers.Default)  // Firestore parse off main thread
                 .collect { list ->
                     _ingredients.value = list
                 }
