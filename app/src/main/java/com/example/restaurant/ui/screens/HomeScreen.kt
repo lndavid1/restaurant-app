@@ -74,9 +74,9 @@ fun HomeScreen(
         viewModel.fetchProducts()
     }
 
-    Box(modifier = Modifier.fillMaxSize().premiumBackground()) {
-        Scaffold(
-            containerColor = Color.Transparent,
+    Scaffold(
+        modifier = Modifier.fillMaxSize().premiumBackground(),
+        containerColor = Color.Transparent,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToChatbot,
@@ -229,7 +229,6 @@ fun HomeScreen(
                 }
             }
         }
-    }
     }
 }
 

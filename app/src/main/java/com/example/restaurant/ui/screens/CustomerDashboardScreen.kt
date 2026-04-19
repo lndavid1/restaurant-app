@@ -147,9 +147,9 @@ fun CustomerDashboardScreen(
     }
 
 
-    Box(modifier = Modifier.fillMaxSize().premiumBackground()) {
-        Scaffold(
-            containerColor = Color.Transparent,
+    Scaffold(
+        modifier = Modifier.fillMaxSize().premiumBackground(),
+        containerColor = Color.Transparent,
             snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
@@ -266,7 +266,6 @@ fun CustomerDashboardScreen(
                 3 -> SettingsTab(token = token, authViewModel = authViewModel, onLogout = onLogout)
             }
         }
-    }
     }
 }
 

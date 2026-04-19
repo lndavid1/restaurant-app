@@ -57,8 +57,8 @@ fun KitchenDashboardScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().premiumBackground()) {
     Scaffold(
+        modifier = Modifier.fillMaxSize().premiumBackground(),
         containerColor = Color.Transparent,
         bottomBar = {
             Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
@@ -205,7 +205,6 @@ fun KitchenDashboardScreen(
                 1 -> KitchenIngredientInventory(viewModel)
             }
         }
-    }
     }
 }
 
