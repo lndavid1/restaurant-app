@@ -163,7 +163,8 @@ class RestaurantRepository {
                                 product_id = reqItem.product_id,
                                 name = product?.name ?: "Sản phẩm #${reqItem.product_id}",
                                 quantity = reqItem.quantity,
-                                recipe_snapshot = product?.recipe  // Snapshot tại thời điểm đặt
+                                price = reqItem.price,                    // Lưu đơn giá cho hóa đơn
+                                recipe_snapshot = product?.recipe
                             )
                         }
 
@@ -201,7 +202,8 @@ class RestaurantRepository {
                     product_id = reqItem.product_id,
                     name = product?.name ?: "Sản phẩm #${reqItem.product_id}",
                     quantity = reqItem.quantity,
-                    recipe_snapshot = product?.recipe  // Snapshot tại thời điểm đặt
+                    price = reqItem.price,                    // Lưu đơn giá cho hóa đơn
+                    recipe_snapshot = product?.recipe
                 )
             }
 

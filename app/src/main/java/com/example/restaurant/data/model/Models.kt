@@ -93,6 +93,7 @@ data class OrderItemDetail(
     val product_id: Int = 0,                        // ID để tra recipe chính xác (0 = order cũ)
     val name: String = "",                          // Tên hiển thị trên màn hình bếp
     val quantity: Int = 1,
+    val price: Double = 0.0,                        // Đơn giá tại thời điểm đặt hàng (dùng cho hóa đơn)
     val recipe_snapshot: List<RecipeItem>? = null   // Snapshot recipe tại thời điểm đặt hàng
 )
 
