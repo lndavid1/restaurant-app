@@ -147,8 +147,10 @@ fun CustomerDashboardScreen(
     }
 
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+    Box(modifier = Modifier.fillMaxSize().premiumBackground()) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToChatbot,
@@ -241,7 +243,6 @@ fun CustomerDashboardScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .premiumBackground()
         ) {
             when (selectedTab) {
                 0 -> HomeTab(
@@ -265,6 +266,7 @@ fun CustomerDashboardScreen(
                 3 -> SettingsTab(token = token, authViewModel = authViewModel, onLogout = onLogout)
             }
         }
+    }
     }
 }
 

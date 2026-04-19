@@ -57,8 +57,9 @@ fun KitchenDashboardScreen(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize().premiumBackground()) {
     Scaffold(
-        containerColor = CreamBG,
+        containerColor = Color.Transparent,
         bottomBar = {
             Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
                 Surface(
@@ -104,7 +105,7 @@ fun KitchenDashboardScreen(
         }
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).fillMaxSize().premiumBackground()
+            modifier = Modifier.padding(padding).fillMaxSize()
         ) {
             val orders by viewModel.orders.collectAsState()
 
@@ -204,6 +205,7 @@ fun KitchenDashboardScreen(
                 1 -> KitchenIngredientInventory(viewModel)
             }
         }
+    }
     }
 }
 
