@@ -580,7 +580,7 @@ class RestaurantViewModel : ViewModel() {
 
     /**
      * Tạo link thanh toán PayOS và trả về checkoutUrl + orderCode qua callback.
-     * @param onSuccess(checkoutUrl, orderCode) – mở Chrome với URL + bắt đầu polling
+     * @param onSuccess(checkoutUrl, orderCode) – mở trình duyệt mặc định với URL + bắt đầu polling
      * @param onError(message)                  – hiện Snackbar
      */
     fun createPayOSPayment(

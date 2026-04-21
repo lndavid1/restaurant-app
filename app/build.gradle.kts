@@ -41,6 +41,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true   // Cần thiết để dùng BuildConfig.DEBUG trong RetrofitClient
     }
     composeOptions {
         // Compose Compiler is bundled with Kotlin 2.x — no explicit version needed
