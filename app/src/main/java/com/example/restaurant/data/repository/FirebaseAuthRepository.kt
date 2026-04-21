@@ -70,6 +70,29 @@ class FirebaseAuthRepository {
         }
     }
 
+    suspend fun toggleFavoriteProduct(uid: String, productId: Int): Result<Boolean> {
+        return try {
+            val docRef = firestore.collection("users").document(uid)
+            val document = docRef.get().await()
+            if (document.exists()) {
+                val currentFavorites = document.get("liked_products") as? List<Number> ?: emptyList()
+                val currentList = currentFavorites.map { it.toInt() }.toMutableList()
+                val isLiked = currentList.contains(productId)
+                if (isLiked) {
+                    currentList.remove(productId)
+                } else {
+                    currentList.add(productId)
+                }
+                docRef.update("liked_products", currentList).await()
+                Result.success(!isLiked)
+            } else {
+                Result.failure(Exception("Không tìm thấy thông tin User"))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("Lỗi cập nhật yêu thích: ${e.localizedMessage}"))
+        }
+    }
+
     suspend fun updateUserProfile(uid: String, fullName: String, phone: String, address: String, avatarUri: Uri? = null): Result<Boolean> {
         return try {
             var avatarUrl: String? = null

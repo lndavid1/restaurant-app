@@ -59,6 +59,15 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    fun toggleFavoriteProduct(uid: String, productId: Int) {
+        viewModelScope.launch {
+            val result = repository.toggleFavoriteProduct(uid, productId)
+            result.onSuccess {
+                loadUserProfile(uid) // Reload to get updated favorites
+            }
+        }
+    }
+
     fun updateUserProfile(uid: String, fullName: String, phone: String, address: String, avatarUri: android.net.Uri? = null) {
         viewModelScope.launch {
             _updateProfileState.value = AuthState.Loading

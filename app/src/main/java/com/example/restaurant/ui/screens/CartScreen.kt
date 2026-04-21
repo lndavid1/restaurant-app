@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import com.example.restaurant.ui.theme.CreamBG
 import com.example.restaurant.ui.theme.StatusGreen
 import com.example.restaurant.ui.theme.WarmBrown
+import com.example.restaurant.ui.viewmodel.AuthViewModel
 import com.example.restaurant.ui.viewmodel.RestaurantViewModel
 import com.example.restaurant.utils.toVndFormat
 
@@ -31,12 +32,20 @@ import com.example.restaurant.utils.toVndFormat
 fun CartScreen(
     token: String,
     viewModel: RestaurantViewModel,
+    authViewModel: AuthViewModel,
     tableId: Int,
     onNavigateBack: () -> Unit,
     onOrderSuccess: () -> Unit
 ) {
+    val userProfile by authViewModel.userProfile.collectAsState()
+    val loyaltyPoints = (userProfile?.get("loyaltyPoints") as? Number)?.toInt() ?: 0
     val cartItems by viewModel.cartItems.collectAsState()
     val total = cartItems.sumOf { it.first.price * it.second }
+    
+    var usePoints by remember { mutableStateOf(false) }
+    val pointsToUse = if (usePoints) minOf(loyaltyPoints, total.toInt()) else 0
+    val discountAmount = pointsToUse.toDouble()
+    val finalTotal = total - discountAmount
 
     Scaffold(
         containerColor = CreamBG,
@@ -163,46 +172,79 @@ fun CartScreen(
                     shadowElevation = 8.dp
                 ) {
                     Column(modifier = Modifier.padding(24.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text("Tổng cộng", fontSize = 13.sp, color = Color.Gray)
-                                Text(
-                                    "${total.toVndFormat()} VND",
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = WarmBrown
-                                )
+                            if (loyaltyPoints >= 1000) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                HorizontalDivider(color = Color.LightGray.copy(alpha=0.2f))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text("Dùng điểm tích luỹ", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A2E))
+                                        Text("Bạn có $loyaltyPoints điểm (-${if (usePoints) pointsToUse.toLong().toVndFormat() else "0"}đ)", fontSize = 12.sp, color = Color.Gray)
+                                    }
+                                    Switch(
+                                        checked = usePoints,
+                                        onCheckedChange = { usePoints = it },
+                                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = WarmBrown, uncheckedTrackColor = Color.LightGray)
+                                    )
+                                }
                             }
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = StatusGreen.copy(alpha = 0.12f)
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HorizontalDivider(color = Color.LightGray.copy(alpha=0.2f), thickness = 1.5.dp)
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    "Đã tính thuế",
-                                    color = StatusGreen,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                )
+                                Column {
+                                    Text("Tổng thanh toán", fontSize = 13.sp, color = Color.Gray)
+                                    Text(
+                                        "${finalTotal.toLong().toVndFormat()} đ",
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = WarmBrown
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = StatusGreen.copy(alpha = 0.12f)
+                                ) {
+                                    Text(
+                                        "Đã tính thuế",
+                                        color = StatusGreen,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                        Button(
-                            onClick = { viewModel.placeOrder(token, tableId, onOrderSuccess) },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = WarmBrown)
-                        ) {
-                            Icon(Icons.Default.ShoppingBag, null, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("XÁC NHẬN - GỬI BẾP", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
-                        }
+                            Button(
+                                onClick = { 
+                                    viewModel.placeOrder(
+                                        token = token, 
+                                        tableId = tableId, 
+                                        discountAmount = discountAmount,
+                                        pointsUsed = pointsToUse,
+                                        onSuccess = onOrderSuccess
+                                    ) 
+                                },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = WarmBrown)
+                            ) {
+                                Icon(Icons.Default.ShoppingBag, null, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("XÁC NHẬN - GỬI BẾP", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+                            }
                     }
                 }
             }

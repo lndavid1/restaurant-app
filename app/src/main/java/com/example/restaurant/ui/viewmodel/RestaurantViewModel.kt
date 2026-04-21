@@ -27,6 +27,9 @@ class RestaurantViewModel : ViewModel() {
     private val _orders = MutableStateFlow<List<Order>>(emptyList())
     val orders: StateFlow<List<Order>> = _orders
 
+    private val _orderHistory = MutableStateFlow<List<Order>>(emptyList())
+    val orderHistory: StateFlow<List<Order>> = _orderHistory
+
     private val _dailyRevenueHistory = MutableStateFlow<List<DailyRevenue>>(emptyList())
     val dailyRevenueHistory: StateFlow<List<DailyRevenue>> = _dailyRevenueHistory
 
@@ -255,6 +258,14 @@ class RestaurantViewModel : ViewModel() {
     fun fetchOrders(token: String) {
         if (token.isNotBlank()) startObservingData(token)
     }
+    fun fetchOrderHistory(userId: String) {
+        viewModelScope.launch {
+            val result = repository.fetchOrderHistory(userId)
+            result.onSuccess {
+                _orderHistory.value = it
+            }
+        }
+    }
 
     /** Gọi khi logout để reset state và cho phép observe lại khi login mới */
     fun clearAllData() {
@@ -461,12 +472,27 @@ class RestaurantViewModel : ViewModel() {
         }
     }
 
-    fun placeOrder(token: String, tableId: Int, onSuccess: () -> Unit) {
+    fun placeOrder(
+        token: String, 
+        tableId: Int, 
+        discountAmount: Double = 0.0,
+        pointsUsed: Int = 0,
+        voucherCode: String? = null,
+        onSuccess: () -> Unit
+    ) {
         viewModelScope.launch {
             try {
                 val items = _cartItems.value.map { OrderItemRequest(it.first.id, it.second, it.first.price) }
                 val total = items.sumOf { it.price * it.quantity }
-                val success = repository.createOrder(token, OrderRequest(tableId, total, items))
+                val request = OrderRequest(
+                    table_id = tableId, 
+                    total_amount = total, 
+                    discount_amount = discountAmount,
+                    points_used = pointsUsed,
+                    voucher_code = voucherCode,
+                    items = items
+                )
+                val success = repository.createOrder(token, request)
                 if (success) {
                     clearCart()
                     onSuccess()
@@ -482,7 +508,7 @@ class RestaurantViewModel : ViewModel() {
     fun claimTable(token: String, tableId: Int) {
         if (tableId == 0) return
         viewModelScope.launch {
-            repository.createOrder(token, OrderRequest(tableId, 0.0, emptyList()))
+            repository.createOrder(token, OrderRequest(table_id = tableId, total_amount = 0.0, items = emptyList()))
         }
     }
 
@@ -682,6 +708,18 @@ class RestaurantViewModel : ViewModel() {
             repository.syncDailyRevenueFromOrders()
             fetchDailyRevenueHistory()
             _toastMessage.emit("Đã đồng bộ doanh thu với danh sách đơn hàng!")
+        }
+    }
+
+    fun submitReview(token: String, productId: Int, rating: Int, comment: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            val success = repository.submitReview(token, productId, rating, comment)
+            if (success) {
+                _toastMessage.emit("Cảm ơn bạn đã đánh giá!")
+                onSuccess()
+            } else {
+                _toastMessage.emit("Có lỗi xảy ra, vui lòng thử lại!")
+            }
         }
     }
 

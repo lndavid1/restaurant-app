@@ -132,6 +132,21 @@ class RestaurantRepository {
         }
     }
 
+    suspend fun fetchOrderHistory(userId: String): Result<List<Order>> {
+        return try {
+            val snapshot = firestore.collection("orders")
+                .whereEqualTo("user_id", userId)
+                .whereEqualTo("payment_status", "paid")
+                .orderBy("id", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(50)
+                .get().await()
+            val list = snapshot.toObjects(Order::class.java)
+            Result.success(list)
+        } catch (e: Exception) {
+            Result.failure(Exception("Lỗi tải lịch sử đơn hàng: ${e.message}"))
+        }
+    }
+
     suspend fun createOrder(token: String, request: OrderRequest): Boolean {
         return try {
             // SSOT: Dùng cache thay vì fetch Firestore (zero extra read)
@@ -183,12 +198,23 @@ class RestaurantRepository {
                         val finalItems = mergedById.values.toList() + mergedByName.values.toList()
 
                         val newTotal = existingOrder.total_amount + request.total_amount
+                        val newDiscount = existingOrder.discount_amount + request.discount_amount
+                        val newPointsUsed = existingOrder.points_used + request.points_used
+                        
                         firestore.collection("orders").document(existingDoc.id)
                             .update(mapOf(
                                 "items_detail" to finalItems,
                                 "total_amount" to newTotal,
+                                "discount_amount" to newDiscount,
+                                "points_used" to newPointsUsed,
+                                "voucher_code" to (request.voucher_code ?: existingOrder.voucher_code),
                                 "order_status" to "pending"
                             )).await()
+                            
+                        if (request.points_used > 0) {
+                            firestore.collection("users").document(token)
+                                .update("loyaltyPoints", com.google.firebase.firestore.FieldValue.increment(-request.points_used.toLong())).await()
+                        }
                         return true
                     }
                 }
@@ -213,6 +239,9 @@ class RestaurantRepository {
                 table_id = request.table_id,
                 order_type = if (request.table_id == 0) "takeaway" else "dine_in",
                 total_amount = request.total_amount,
+                discount_amount = request.discount_amount,
+                points_used = request.points_used,
+                voucher_code = request.voucher_code,
                 payment_status = "unpaid",
                 order_status = "pending",
                 created_at = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
@@ -220,6 +249,11 @@ class RestaurantRepository {
                 items_detail = details
             )
             firestore.collection("orders").document(newId.toString()).set(order).await()
+
+            if (request.points_used > 0) {
+                firestore.collection("users").document(token)
+                    .update("loyaltyPoints", com.google.firebase.firestore.FieldValue.increment(-request.points_used.toLong())).await()
+            }
 
             if (request.table_id != 0) {
                 firestore.collection("restaurant_tables").document(request.table_id.toString())
@@ -924,6 +958,24 @@ class RestaurantRepository {
             }
         } catch (e: Exception) {
             android.util.Log.e("Loyalty", "Failed to add points: ${e.message}", e)
+        }
+    }
+
+    suspend fun submitReview(token: String, productId: Int, rating: Int, comment: String): Boolean {
+        return try {
+            val reviewId = java.util.UUID.randomUUID().toString()
+            val review = com.example.restaurant.data.model.Review(
+                id = reviewId,
+                product_id = productId,
+                user_id = token,
+                rating = rating,
+                comment = comment,
+                created_at = System.currentTimeMillis()
+            )
+            firestore.collection("reviews").document(reviewId).set(review).await()
+            true
+        } catch (e: Exception) {
+            false
         }
     }
 }

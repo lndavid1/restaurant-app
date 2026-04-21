@@ -73,6 +73,7 @@ fun CustomerDashboardScreen(
     onOrderMore: (Int, String) -> Unit,
     onRequestPayment: (Int) -> Unit,
     onNavigateToChatbot: () -> Unit,
+    onNavigateToOrderHistory: () -> Unit,
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -270,7 +271,7 @@ fun CustomerDashboardScreen(
                     snackbarHostState = snackbarHostState
                 )
                 2 -> AboutTab(mapWebView = mapWebView)
-                3 -> SettingsTab(token = token, authViewModel = authViewModel, onLogout = onLogout)
+                3 -> SettingsTab(token = token, authViewModel = authViewModel, onNavigateToOrderHistory = onNavigateToOrderHistory, onLogout = onLogout)
             }
         }
     }
@@ -292,6 +293,7 @@ fun HomeTab(
     val isCompact = screenConfig.screenWidthDp <= 360
 
     val userProfile by authViewModel.userProfile.collectAsState()
+    val likedProducts = (userProfile?.get("liked_products") as? List<Number>)?.map { it.toInt() } ?: emptyList()
     val products by restaurantViewModel.products.collectAsState()
     val orders by restaurantViewModel.orders.collectAsState()
     val images = products.mapNotNull { it.image_url?.takeIf { url -> url.isNotEmpty() } }.take(5)
@@ -636,6 +638,21 @@ fun HomeTab(
                                                 Text("4.8", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                             }
                                         }
+                                        
+                                        val isLiked = likedProducts.contains(product.id)
+                                        Surface(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .offset(x = (-8).dp, y = 8.dp)
+                                                .size(30.dp),
+                                            shape = CircleShape,
+                                            color = Color.White.copy(alpha=0.9f),
+                                            shadowElevation = 2.dp
+                                        ) {
+                                            IconButton(onClick = { authViewModel.toggleFavoriteProduct(token, product.id) }) {
+                                                Icon(if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, tint = if (isLiked) Color.Red else Color.LightGray, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
                                     }
                                     Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                                         Text(
@@ -748,7 +765,13 @@ fun HomeTab(
                                     }
                                 }
                             }
-                            Icon(Icons.Default.AddCircle, null, tint = WarmBrown, modifier = Modifier.size(32.dp))
+                            val isLiked = likedProducts.contains(product.id)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                IconButton(onClick = { authViewModel.toggleFavoriteProduct(token, product.id) }, modifier = Modifier.size(32.dp)) {
+                                    Icon(if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, tint = if (isLiked) Color.Red else Color.LightGray, modifier = Modifier.size(28.dp))
+                                }
+                                Icon(Icons.Default.AddCircle, null, tint = WarmBrown, modifier = Modifier.size(32.dp))
+                            }
                         }
                     }
                 }
@@ -1373,7 +1396,7 @@ fun EditOrderBottomSheet(
 }
 
 @Composable
-fun SettingsTab(token: String, authViewModel: AuthViewModel, onLogout: () -> Unit) {
+fun SettingsTab(token: String, authViewModel: AuthViewModel, onNavigateToOrderHistory: () -> Unit, onLogout: () -> Unit) {
     LaunchedEffect(Unit) {
         authViewModel.loadUserProfile(token)
     }
@@ -1690,6 +1713,19 @@ fun SettingsTab(token: String, authViewModel: AuthViewModel, onLogout: () -> Uni
         
         Spacer(modifier = Modifier.height(32.dp))
         
+        Button(
+            onClick = onNavigateToOrderHistory,
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = WarmBrown.copy(alpha=0.1f)),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+        ) {
+            Icon(Icons.Default.ReceiptLong, null, tint = WarmBrown, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Lịch sử đơn hàng", color = WarmBrown, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
         Button(
             onClick = onLogout,
             modifier = Modifier.fillMaxWidth().height(54.dp),

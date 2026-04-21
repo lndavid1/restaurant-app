@@ -77,6 +77,9 @@ data class RestaurantTable(
 data class OrderRequest(
     val table_id: Int = 0,
     val total_amount: Double = 0.0,
+    val discount_amount: Double = 0.0,
+    val points_used: Int = 0,
+    val voucher_code: String? = null,
     val items: List<OrderItemRequest> = emptyList()
 )
 
@@ -100,6 +103,9 @@ data class Order(
     val table_id: Int? = null,
     val order_type: String = "dine_in",
     val total_amount: Double = 0.0,
+    val discount_amount: Double = 0.0,
+    val points_used: Int = 0,
+    val voucher_code: String? = null,
     val payment_status: String = "unpaid",
     val order_status: String = "pending",
     val created_at: String = "",

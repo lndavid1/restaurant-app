@@ -208,6 +208,7 @@ fun RestaurantApp() {
                 CartScreen(
                     token = token,
                     viewModel = restaurantViewModel,
+                    authViewModel = authViewModel,
                     tableId = currentTableId,
                     onNavigateBack = { navController.popBackStack() },
                     onOrderSuccess = {
@@ -246,6 +247,9 @@ fun RestaurantApp() {
                     onNavigateToChatbot = {
                         navController.navigate(Screen.Chatbot.route)
                     },
+                    onNavigateToOrderHistory = {
+                        navController.navigate(Screen.OrderHistory.route)
+                    },
                     onLogout = {
                         restaurantViewModel.clearAllData()
                         clearSession()
@@ -253,6 +257,16 @@ fun RestaurantApp() {
                         currentUserRole = null
                         navController.navigate(Screen.Login.route) { popUpTo(0) }
                     }
+                )
+            }
+        }
+        
+        composable(Screen.OrderHistory.route) {
+            userToken?.let { token ->
+                OrderHistoryScreen(
+                    token = token,
+                    viewModel = restaurantViewModel,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
         }
