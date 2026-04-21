@@ -71,7 +71,7 @@ fun CustomerDashboardScreen(
     onNavigateToTable: () -> Unit,
     onNavigateToTakeaway: () -> Unit,
     onOrderMore: (Int, String) -> Unit,
-    onRequestPayment: (Int) -> Unit,
+    onRequestPayment: (Int, Int, Double) -> Unit,
     onNavigateToChatbot: () -> Unit,
     onNavigateToOrderHistory: () -> Unit,
     onLogout: () -> Unit
@@ -266,6 +266,7 @@ fun CustomerDashboardScreen(
                 1 -> NotificationsTab(
                     token = token,
                     restaurantViewModel = restaurantViewModel,
+                    authViewModel = authViewModel,
                     onOrderMore = onOrderMore,
                     onRequestPayment = onRequestPayment,
                     snackbarHostState = snackbarHostState
@@ -811,8 +812,9 @@ fun ActionCircleBtn(title: String, icon: ImageVector, onClick: () -> Unit, gradi
 fun NotificationsTab(
     token: String,
     restaurantViewModel: RestaurantViewModel,
+    authViewModel: AuthViewModel,
     onOrderMore: (Int, String) -> Unit,
-    onRequestPayment: (Int) -> Unit,
+    onRequestPayment: (Int, Int, Double) -> Unit,
     snackbarHostState: SnackbarHostState
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -1107,10 +1109,11 @@ fun NotificationsTab(
         InvoiceBottomSheet(
             order = invoiceOrder!!,
             products = products,
+            authViewModel = authViewModel,
             onDismiss = { invoiceOrder = null },
-            onConfirmPayment = { orderId ->
+            onConfirmPayment = { orderId, pointsUsed, discountAmount ->
                 invoiceOrder = null
-                onRequestPayment(orderId)
+                onRequestPayment(orderId, pointsUsed, discountAmount)
             }
         )
     }
@@ -1121,10 +1124,19 @@ fun NotificationsTab(
 fun InvoiceBottomSheet(
     order: com.example.restaurant.data.model.Order,
     products: List<com.example.restaurant.data.model.Product>,
+    authViewModel: AuthViewModel,
     onDismiss: () -> Unit,
-    onConfirmPayment: (Int) -> Unit
+    onConfirmPayment: (Int, Int, Double) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    
+    val userProfile by authViewModel.userProfile.collectAsState()
+    val loyaltyPoints = (userProfile?.get("loyaltyPoints") as? Number)?.toInt() ?: 0
+    var usePoints by remember { mutableStateOf(false) }
+    
+    val pointsToUse = if (usePoints) minOf(loyaltyPoints, order.total_amount.toInt()) else 0
+    val discountAmount = pointsToUse.toDouble()
+    val finalTotal = order.total_amount - discountAmount
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1242,11 +1254,38 @@ fun InvoiceBottomSheet(
                         Text("Phí dịch vụ", fontSize = 14.sp, color = Color.Gray)
                         Text("Miễn phí", fontSize = 14.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
                     }
+                    
+                    if (loyaltyPoints > 0) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = WarmBrown.copy(alpha = 0.2f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Dùng điểm tích luỹ", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Bạn có ${loyaltyPoints.toLong().toVndFormat()} điểm", fontSize = 12.sp, color = Color.Gray)
+                            }
+                            Switch(
+                                checked = usePoints,
+                                onCheckedChange = { usePoints = it },
+                                colors = SwitchDefaults.colors(checkedThumbColor = WarmBrown, checkedTrackColor = WarmBrown.copy(alpha=0.3f))
+                            )
+                        }
+                        
+                        if (usePoints) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Giảm giá (Điểm)", fontSize = 14.sp, color = Color(0xFFE65100))
+                                Text("-${discountAmount.toLong().toVndFormat()} ₫", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE65100))
+                            }
+                        }
+                    }
+
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = WarmBrown.copy(alpha = 0.2f), thickness = 1.5.dp)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("TỔNG THANH TOÁN", fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color(0xFF1A1A2E))
                         Text(
-                            "${order.total_amount.toLong().toVndFormat()} ₫",
+                            "${finalTotal.toLong().toVndFormat()} ₫",
                             fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color(0xFFD9534F)
                         )
                     }
@@ -1285,7 +1324,7 @@ fun InvoiceBottomSheet(
                 }
                 // Nút xác nhận thanh toán
                 Button(
-                    onClick = { onConfirmPayment(order.id) },
+                    onClick = { onConfirmPayment(order.id, pointsToUse, discountAmount) },
                     modifier = Modifier.weight(2f).height(54.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(

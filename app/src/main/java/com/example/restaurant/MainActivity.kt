@@ -241,8 +241,10 @@ fun RestaurantApp() {
                         currentTableId = tableId
                         navController.navigate(Screen.Order.createRoute(tableId, tableName))
                     },
-                    onRequestPayment = { orderId ->
-                        restaurantViewModel.requestPayment(orderId)
+                    onRequestPayment = { orderId, pointsUsed, discountAmount ->
+                        userToken?.let {
+                            restaurantViewModel.requestPayment(it, orderId, pointsUsed, discountAmount)
+                        }
                     },
                     onNavigateToChatbot = {
                         navController.navigate(Screen.Chatbot.route)

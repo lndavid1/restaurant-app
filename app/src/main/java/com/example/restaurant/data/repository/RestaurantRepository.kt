@@ -349,10 +349,25 @@ class RestaurantRepository {
         }
     }
 
-    suspend fun requestPayment(orderId: Int): Boolean {
+    suspend fun requestPayment(token: String, orderId: Int, pointsUsed: Int, discountAmount: Double): Boolean {
         return try {
+            val updateData = mutableMapOf<String, Any>(
+                "payment_status" to "requested"
+            )
+            if (pointsUsed > 0) {
+                val orderRef = firestore.collection("orders").document(orderId.toString())
+                val orderSnapshot = orderRef.get().await()
+                if (orderSnapshot.exists()) {
+                    val currentDiscount = orderSnapshot.getDouble("discount_amount") ?: 0.0
+                    val currentPoints = orderSnapshot.getLong("points_used") ?: 0L
+                    updateData["discount_amount"] = currentDiscount + discountAmount
+                    updateData["points_used"] = currentPoints + pointsUsed
+                }
+                firestore.collection("users").document(token)
+                    .update("loyaltyPoints", com.google.firebase.firestore.FieldValue.increment(-pointsUsed.toLong())).await()
+            }
             firestore.collection("orders").document(orderId.toString())
-                .update("payment_status", "requested").await()
+                .update(updateData).await()
             true
         } catch (e: Exception) { false }
     }

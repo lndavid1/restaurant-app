@@ -567,9 +567,9 @@ class RestaurantViewModel : ViewModel() {
         }
     }
 
-    fun requestPayment(orderId: Int) {
+    fun requestPayment(token: String, orderId: Int, pointsUsed: Int = 0, discountAmount: Double = 0.0) {
         viewModelScope.launch {
-            if (repository.requestPayment(orderId)) {
+            if (repository.requestPayment(token, orderId, pointsUsed, discountAmount)) {
                 _toastMessage.emit("Đã gọi nhân viên thanh toán!")
             } else {
                 _toastMessage.emit("Lỗi gọi thanh toán")
