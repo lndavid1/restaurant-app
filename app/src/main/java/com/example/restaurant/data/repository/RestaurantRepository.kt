@@ -363,11 +363,15 @@ class RestaurantRepository {
                 firestore.collection("orders").document(orderId.toString())
                     .update("order_status", "completed", "payment_status", "paid").await()
                 
-                // Cập nhật thống kê ngày dựa theo ngày tạo hóa đơn
                 val amount = orderDoc.getDouble("total_amount") ?: 0.0
                 val createdAt = orderDoc.getString("created_at") ?: ""
                 val dateStr = if (createdAt.length >= 10) createdAt.substring(0, 10) else SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                 updateDailyRevenue(dateStr, amount, 1)
+
+                val userId = orderDoc.getString("user_id") ?: ""
+                if (userId.isNotEmpty()) {
+                    addLoyaltyPointsToUser(userId, amount)
+                }
             }
             
             true
@@ -396,6 +400,11 @@ class RestaurantRepository {
 
                     firestore.collection("orders").document(doc.id)
                         .update("order_status", "completed", "payment_status", "paid").await()
+
+                    val userId = doc.getString("user_id") ?: ""
+                    if (userId.isNotEmpty()) {
+                        addLoyaltyPointsToUser(userId, orderAmount)
+                    }
                 }
             }
 
@@ -868,6 +877,14 @@ class RestaurantRepository {
                             )
                         ).await()
 
+                    try {
+                        val doc = firestore.collection("orders").document(orderId.toString()).get().await()
+                        val userId = doc.getString("user_id") ?: ""
+                        if (userId.isNotEmpty()) {
+                            addLoyaltyPointsToUser(userId, amount)
+                        }
+                    } catch (e: Exception) {}
+
                     if (tableId != 0) {
                         firestore.collection("restaurant_tables").document(tableId.toString())
                             .update(mapOf("status" to "available", "needs_service" to false)).await()
@@ -886,5 +903,27 @@ class RestaurantRepository {
             kotlinx.coroutines.delay(intervalMs)
         }
         onError("Hết thời gian chờ xác nhận thanh toán (5 phút)")
+    }
+    
+    private suspend fun addLoyaltyPointsToUser(userId: String, amount: Double) {
+        try {
+            val pointsToAdd = (amount / 1000).toInt()
+            android.util.Log.d("Loyalty", "Adding $pointsToAdd points to user $userId for amount $amount")
+            if (pointsToAdd > 0) {
+                val userRef = firestore.collection("users").document(userId)
+                firestore.runTransaction { transaction ->
+                    val snapshot = transaction.get(userRef)
+                    if (!snapshot.exists()) {
+                        android.util.Log.e("Loyalty", "User document $userId does not exist!")
+                        return@runTransaction
+                    }
+                    val currentPoints = snapshot.getLong("loyaltyPoints") ?: 0L
+                    transaction.update(userRef, "loyaltyPoints", currentPoints + pointsToAdd)
+                }.await()
+                android.util.Log.d("Loyalty", "Successfully added points to $userId")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("Loyalty", "Failed to add points: ${e.message}", e)
+        }
     }
 }

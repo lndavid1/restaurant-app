@@ -44,7 +44,8 @@ class FirebaseAuthRepository {
                     "phone" to phone,
                     "address" to address,
                     "role" to "customer",
-                    "createdAt" to System.currentTimeMillis()
+                    "createdAt" to System.currentTimeMillis(),
+                    "loyaltyPoints" to 0
                 )
                 firestore.collection("users").document(user.uid).set(userData).await()
                 Result.success(Pair(user.uid, "customer"))
@@ -213,6 +214,86 @@ class FirebaseAuthRepository {
             } else {
                 Result.failure(Exception("Lỗi vô hiệu: $msg"))
             }
+        }
+    }
+
+    suspend fun getAllUsers(): Result<List<Map<String, Any>>> {
+        return try {
+            val snapshot = firestore.collection("users").get().await()
+            val users = snapshot.documents.mapNotNull { doc ->
+                val data = doc.data?.toMutableMap()
+                if (data != null) {
+                    data["uid"] = doc.id // Add the document ID as uid
+                }
+                data
+            }
+            Result.success(users)
+        } catch (e: Exception) {
+            Result.failure(Exception("Lỗi lấy danh sách user: ${e.localizedMessage}"))
+        }
+    }
+
+    suspend fun updateUserRole(uid: String, newRole: String): Result<Boolean> {
+        return try {
+            firestore.collection("users").document(uid).update("role", newRole).await()
+            Result.success(true)
+        } catch (e: Exception) {
+            Result.failure(Exception("Lỗi cập nhật quyền: ${e.localizedMessage}"))
+        }
+    }
+
+    suspend fun createUserByAdmin(email: String, password: String, fullName: String, role: String): Result<Boolean> {
+        return try {
+            val context = com.google.firebase.FirebaseApp.getInstance().applicationContext
+            val options = com.google.firebase.FirebaseApp.getInstance().options
+            val secondaryApp = try {
+                com.google.firebase.FirebaseApp.getInstance("SecondaryApp")
+            } catch (e: Exception) {
+                com.google.firebase.FirebaseApp.initializeApp(context, options, "SecondaryApp")
+            }
+            
+            val secondaryAuth = com.google.firebase.auth.FirebaseAuth.getInstance(secondaryApp!!)
+            val authResult = secondaryAuth.createUserWithEmailAndPassword(email, password).await()
+            val newUid = authResult.user?.uid
+            if (newUid != null) {
+                val userData = hashMapOf(
+                    "email" to email,
+                    "fullName" to fullName,
+                    "phone" to "",
+                    "address" to "",
+                    "role" to role,
+                    "createdAt" to System.currentTimeMillis(),
+                    "loyaltyPoints" to 0
+                )
+                firestore.collection("users").document(newUid).set(userData).await()
+                secondaryAuth.signOut()
+                Result.success(true)
+            } else {
+                Result.failure(Exception("Không lấy được UID sau khi tạo"))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("Lỗi tạo user: ${e.localizedMessage}"))
+        }
+    }
+    
+    suspend fun updateUserDetails(uid: String, fullName: String, role: String): Result<Boolean> {
+        return try {
+            firestore.collection("users").document(uid).update(
+                "fullName", fullName,
+                "role", role
+            ).await()
+            Result.success(true)
+        } catch (e: Exception) {
+            Result.failure(Exception("Lỗi cập nhật user: ${e.localizedMessage}"))
+        }
+    }
+
+    suspend fun deleteUserDocument(uid: String): Result<Boolean> {
+        return try {
+            firestore.collection("users").document(uid).delete().await()
+            Result.success(true)
+        } catch (e: Exception) {
+            Result.failure(Exception("Lỗi xóa user: ${e.localizedMessage}"))
         }
     }
 }

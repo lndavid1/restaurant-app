@@ -56,6 +56,7 @@ import com.example.restaurant.ui.viewmodel.MenuScanViewModel
 import com.example.restaurant.ui.viewmodel.IngredientScanViewModel
 import com.example.restaurant.ui.viewmodel.AdminAnalyticsViewModel
 import com.example.restaurant.ui.viewmodel.AIInsightState
+import com.example.restaurant.ui.viewmodel.AuthViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.restaurant.utils.toVndFormat
 import com.example.restaurant.ui.theme.premiumBackground
@@ -71,6 +72,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 fun AdminDashboardScreen(
     token: String,
     viewModel: RestaurantViewModel,
+    authViewModel: AuthViewModel,
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -156,6 +158,7 @@ fun AdminDashboardScreen(
                             Triple("Thực đơn", Icons.Default.RestaurantMenu, 2),
                             Triple("Thống kê", Icons.Default.BarChart, 3),
                             Triple("Kho NL", Icons.Default.ShoppingCart, 4),
+                            Triple("Nhân viên", Icons.Default.Badge, 5)
                         )
                         navItems.forEach { (label, icon, index) ->
                             val isSelected = selectedTab == index
@@ -274,6 +277,7 @@ fun AdminDashboardScreen(
                              showIngredientScanResult = true
                          }
                      )
+                5 -> StaffManagementView(authViewModel)
             }
         }
     }
@@ -2814,6 +2818,286 @@ fun IngredientEditDialog(
             ) {
                 Text("Hủy", color = Color.Gray)
             }
+        }
+    )
+}
+
+@Composable
+fun StaffManagementView(authViewModel: AuthViewModel) {
+    val usersList by authViewModel.usersList.collectAsState()
+    var staffTab by remember { mutableIntStateOf(0) } // 0 = Nhân viên, 1 = Khách hàng
+
+    var showAddDialog by remember { mutableStateOf(false) }
+    var userToEdit by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var userToDelete by remember { mutableStateOf<Map<String, Any>?>(null) }
+
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        authViewModel.fetchUsers()
+    }
+
+    val filteredUsers = usersList.filter { user ->
+        val role = user["role"] as? String ?: "customer"
+        if (staffTab == 0) role != "customer" else role == "customer"
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Quản lý Nhân sự", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
+                if (staffTab == 0) {
+                    Button(
+                        onClick = { showAddDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = WarmBrown),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Thêm", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // Tabs
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White, RoundedCornerShape(12.dp))
+                    .border(1.dp, Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            ) {
+                val tabs = listOf("Nhân viên", "Khách hàng")
+                tabs.forEachIndexed { index, title ->
+                    val isSelected = staffTab == index
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                if (isSelected) WarmBrown else Color.Transparent,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .clickable { staffTab = index }
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            title,
+                            color = if (isSelected) Color.White else Color.Gray,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+            
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 100.dp)
+            ) {
+                items(filteredUsers, key = { it["uid"] as String }) { user ->
+                    val uid = user["uid"] as? String ?: ""
+                    val email = user["email"] as? String ?: ""
+                    val fullName = user["fullName"] as? String ?: "Chưa cập nhật tên"
+                    val role = user["role"] as? String ?: "customer"
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White,
+                        shadowElevation = 2.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(fullName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1A1A2E))
+                                Text(email, color = Color.Gray, fontSize = 14.sp)
+                                Spacer(Modifier.height(4.dp))
+                                Text("Quyền: ${role.uppercase()}", fontWeight = FontWeight.ExtraBold, color = WarmBrown, fontSize = 12.sp)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Surface(shape = CircleShape, color = Color(0xFFF5F5F5), modifier = Modifier.size(36.dp).clickable { userToEdit = user }) {
+                                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Edit, null, tint = Color.Gray, modifier = Modifier.size(16.dp)) }
+                                }
+                                Surface(shape = CircleShape, color = Color(0xFFFBE9E7), modifier = Modifier.size(36.dp).clickable { userToDelete = user }) {
+                                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Delete, null, tint = Color(0xFFD9534F), modifier = Modifier.size(16.dp)) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+    }
+
+    if (showAddDialog) {
+        UserAddDialog(
+            onDismiss = { showAddDialog = false },
+            onConfirm = { email, password, fullName, role ->
+                authViewModel.createUserByAdmin(email, password, fullName, role) { success, msg ->
+                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                }
+                showAddDialog = false
+            }
+        )
+    }
+
+    if (userToEdit != null) {
+        val user = userToEdit!!
+        UserEditDialog(
+            user = user,
+            onDismiss = { userToEdit = null },
+            onConfirm = { uid, fullName, role ->
+                authViewModel.updateUserDetails(uid, fullName, role) { success, msg ->
+                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                }
+                userToEdit = null
+            }
+        )
+    }
+
+    if (userToDelete != null) {
+        DeleteConfirmDialog(
+            title = "Xóa Tài Khoản",
+            message = "Bạn có chắc muốn xóa tài khoản '${userToDelete!!["email"]}'? Thao tác này sẽ xóa hồ sơ và chặn người dùng truy cập.",
+            onDismiss = { userToDelete = null },
+            onConfirm = {
+                authViewModel.deleteUserDocument(userToDelete!!["uid"] as String) { success, msg ->
+                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                }
+                userToDelete = null
+            }
+        )
+    }
+}
+
+@Composable
+fun UserAddDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String, String, String) -> Unit
+) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var fullName by remember { mutableStateOf("") }
+    var role by remember { mutableStateOf("employee") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Thêm Nhân Viên Mới", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                OutlinedTextField(
+                    value = email, onValueChange = { email = it },
+                    label = { Text("Email đăng nhập") }, modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
+                    value = password, onValueChange = { password = it },
+                    label = { Text("Mật khẩu") }, modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
+                    value = fullName, onValueChange = { fullName = it },
+                    label = { Text("Họ tên") }, modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Text("Chọn Quyền:", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val roles = listOf("employee", "kitchen", "admin")
+                    roles.forEach { r ->
+                        Surface(
+                            modifier = Modifier.weight(1f).clickable { role = r },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (role == r) WarmBrown else Color.LightGray.copy(alpha = 0.3f)
+                        ) {
+                            Text(
+                                r.uppercase(),
+                                color = if (role == r) Color.White else Color.Gray,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 10.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { if (email.isNotBlank() && password.isNotBlank()) onConfirm(email.trim(), password.trim(), fullName.trim(), role) },
+                colors = ButtonDefaults.buttonColors(containerColor = WarmBrown)
+            ) { Text("Tạo") }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) { Text("Hủy", color = Color.Gray) }
+        }
+    )
+}
+
+@Composable
+fun UserEditDialog(
+    user: Map<String, Any>,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String, String) -> Unit
+) {
+    var fullName by remember { mutableStateOf(user["fullName"] as? String ?: "") }
+    var role by remember { mutableStateOf(user["role"] as? String ?: "customer") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Cập Nhật Thông Tin", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("Email: ${user["email"]}", color = Color.Gray, fontSize = 14.sp)
+                OutlinedTextField(
+                    value = fullName, onValueChange = { fullName = it },
+                    label = { Text("Họ tên") }, modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Text("Chọn Quyền:", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val roles = listOf("customer", "employee", "kitchen", "admin")
+                    roles.forEach { r ->
+                        Surface(
+                            modifier = Modifier.weight(1f).clickable { role = r },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (role == r) WarmBrown else Color.LightGray.copy(alpha = 0.3f)
+                        ) {
+                            Text(
+                                r.uppercase(),
+                                color = if (role == r) Color.White else Color.Gray,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 10.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(user["uid"] as String, fullName.trim(), role) },
+                colors = ButtonDefaults.buttonColors(containerColor = WarmBrown)
+            ) { Text("Lưu") }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) { Text("Hủy", color = Color.Gray) }
         }
     )
 }

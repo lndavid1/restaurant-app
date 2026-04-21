@@ -120,3 +120,24 @@ data class DailyRevenue(
     val order_count: Int = 0,
     val last_updated: Long = 0L
 )
+
+data class Voucher(
+    val id: String = "",
+    val code: String = "",
+    val discount_amount: Double = 0.0,
+    val is_percent: Boolean = false,
+    val min_order_value: Double = 0.0,
+    val max_discount: Double? = null,
+    val valid_until: Long = 0L,
+    val usage_limit: Int = 0,
+    val times_used: Int = 0
+)
+
+data class Review(
+    val id: String = "",
+    val product_id: Int = 0,
+    val user_id: String = "",
+    val rating: Int = 5,
+    val comment: String = "",
+    val created_at: Long = 0L
+)

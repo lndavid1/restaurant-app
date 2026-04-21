@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -1373,6 +1374,9 @@ fun EditOrderBottomSheet(
 
 @Composable
 fun SettingsTab(token: String, authViewModel: AuthViewModel, onLogout: () -> Unit) {
+    LaunchedEffect(Unit) {
+        authViewModel.loadUserProfile(token)
+    }
     val userProfile by authViewModel.userProfile.collectAsState()
     val updateState by authViewModel.updateProfileState.collectAsState()
     
@@ -1463,6 +1467,84 @@ fun SettingsTab(token: String, authViewModel: AuthViewModel, onLogout: () -> Uni
         }
         
         Spacer(modifier = Modifier.height(32.dp))
+
+        // Loyalty Card & Rank
+        val loyaltyPoints = (userProfile?.get("loyaltyPoints") as? Number)?.toInt() ?: 0
+        
+        val rankName = when {
+            loyaltyPoints >= 5000 -> "Thành Viên Kim Cương"
+            loyaltyPoints >= 1000 -> "Thành Viên Vàng"
+            else -> "Thành Viên Khởi Đầu"
+        }
+        val rankColor = when {
+            loyaltyPoints >= 5000 -> Color(0xFF3F51B5)
+            loyaltyPoints >= 1000 -> Color(0xFFFF8F00)
+            else -> Color(0xFF8D6E63)
+        }
+        val rankBgColor = when {
+            loyaltyPoints >= 5000 -> Color(0xFFE8EAF6)
+            loyaltyPoints >= 1000 -> Color(0xFFFFF8E1)
+            else -> Color(0xFFEFEBE9)
+        }
+        val rankIcon = when {
+            loyaltyPoints >= 5000 -> Icons.Default.Star
+            loyaltyPoints >= 1000 -> Icons.Default.Stars
+            else -> Icons.Default.Face
+        }
+        
+        val nextRankPoints = when {
+            loyaltyPoints >= 5000 -> 0
+            loyaltyPoints >= 1000 -> 5000
+            else -> 1000
+        }
+        val progress = if (nextRankPoints > 0) (loyaltyPoints.toFloat() / nextRankPoints).coerceIn(0f, 1f) else 1f
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            color = rankBgColor,
+            border = BorderStroke(1.dp, rankColor.copy(alpha = 0.5f)),
+            shadowElevation = 0.dp
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(rankIcon, contentDescription = "Rank", tint = rankColor, modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text("Điểm tích luỹ", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = rankColor)
+                            Text(rankName, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = rankColor)
+                        }
+                    }
+                    Text("$loyaltyPoints", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = rankColor)
+                }
+                
+                if (nextRankPoints > 0) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Tiến trình thăng hạng", fontSize = 12.sp, color = rankColor.copy(alpha = 0.8f))
+                        Text("${loyaltyPoints}/${nextRankPoints}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = rankColor)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                        color = rankColor,
+                        trackColor = rankColor.copy(alpha = 0.2f)
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Input Fields (Settings Card)
         Surface(

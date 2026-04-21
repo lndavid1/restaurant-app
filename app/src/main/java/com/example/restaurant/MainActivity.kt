@@ -262,6 +262,7 @@ fun RestaurantApp() {
                 AdminDashboardScreen(
                     token = token,
                     viewModel = restaurantViewModel,
+                    authViewModel = authViewModel,
                     onLogout = {
                         restaurantViewModel.clearAllData()
                         clearSession()

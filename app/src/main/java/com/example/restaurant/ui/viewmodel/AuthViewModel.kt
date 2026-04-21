@@ -107,4 +107,61 @@ class AuthViewModel : ViewModel() {
         _otpState.value = AuthState.Idle
         _changePasswordState.value = AuthState.Idle
     }
+
+    private val _usersList = MutableStateFlow<List<Map<String, Any>>>(emptyList())
+    val usersList: StateFlow<List<Map<String, Any>>> = _usersList
+
+    fun fetchUsers() {
+        viewModelScope.launch {
+            val result = repository.getAllUsers()
+            result.onSuccess { data ->
+                _usersList.value = data
+            }
+        }
+    }
+
+    fun updateUserRole(uid: String, newRole: String) {
+        viewModelScope.launch {
+            val result = repository.updateUserRole(uid, newRole)
+            result.onSuccess {
+                fetchUsers() // Refresh list
+            }
+        }
+    }
+
+    fun createUserByAdmin(email: String, password: String, fullName: String, role: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.createUserByAdmin(email, password, fullName, role)
+            if (result.isSuccess) {
+                fetchUsers()
+                onResult(true, "Tạo tài khoản thành công")
+            } else {
+                onResult(false, result.exceptionOrNull()?.message ?: "Lỗi tạo tài khoản")
+            }
+        }
+    }
+
+    fun updateUserDetails(uid: String, fullName: String, role: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.updateUserDetails(uid, fullName, role)
+            if (result.isSuccess) {
+                fetchUsers()
+                onResult(true, "Cập nhật thành công")
+            } else {
+                onResult(false, result.exceptionOrNull()?.message ?: "Lỗi cập nhật")
+            }
+        }
+    }
+
+    fun deleteUserDocument(uid: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.deleteUserDocument(uid)
+            if (result.isSuccess) {
+                fetchUsers()
+                onResult(true, "Đã xóa hồ sơ")
+            } else {
+                onResult(false, result.exceptionOrNull()?.message ?: "Lỗi xóa hồ sơ")
+            }
+        }
+    }
 }
