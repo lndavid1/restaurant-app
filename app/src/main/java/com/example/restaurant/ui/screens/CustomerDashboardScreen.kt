@@ -100,6 +100,12 @@ fun CustomerDashboardScreen(
     var mapWebView by remember { mutableStateOf<WebView?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    DisposableEffect(Unit) {
+        onDispose {
+            restaurantViewModel.stopPayOSPolling()
+        }
+    }
+
     DisposableEffect(selectedTab) {
         if (selectedTab == 2) {
             val wv = WebView(context).apply {
@@ -808,7 +814,7 @@ fun NotificationsTab(
             com.example.restaurant.utils.SoundManager.playOrderCompletedSound(context)
             newlyCompleted.forEach { notifiedCompletedIds.add(it.id) }
         }
-        restaurantViewModel.knownCompletedIds.addAll(newlyCompleted.map { it.id })
+        restaurantViewModel.markCompletedIdsAsSeen(newlyCompleted.map { it.id }.toSet())
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)

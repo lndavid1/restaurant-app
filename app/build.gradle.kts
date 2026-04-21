@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.restaurant"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 9
+        versionName = "1.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -51,6 +51,15 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    // Đặt tên APK theo version: restaurant-v1.1-debug.apk
+    applicationVariants.all {
+        val variant = this
+        variant.outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            output.outputFileName = "restaurant-v${variant.versionName}-${variant.buildType.name}.apk"
+        }
+    }
 }
 
 dependencies {
@@ -81,6 +90,7 @@ dependencies {
     implementation("com.google.firebase:firebase-ai")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
     debugImplementation("com.google.firebase:firebase-appcheck-debug") // App Check debug provider
 
     testImplementation(libs.junit)
@@ -91,3 +101,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
+
+
+
+

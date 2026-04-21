@@ -49,6 +49,7 @@ data class ScannedIngredientItem(
     var isPossibleDuplicate: Boolean = false
 )
 
+@com.google.firebase.firestore.IgnoreExtraProperties
 data class Product(
     val id: Int = 0,
     val category_id: Int? = null,
@@ -59,10 +60,6 @@ data class Product(
     @get:PropertyName("is_available") @set:PropertyName("is_available")
     @get:JvmName("getIsAvailable") @set:JvmName("setIsAvailable")
     var is_available: Int = 1,
-    // Ánh xạ thêm field "_available" (có dấu gạch dưới đầu) từ Firestore để tránh warning spam
-    @get:PropertyName("_available") @set:PropertyName("_available")
-    @get:JvmName("get_available") @set:JvmName("set_available")
-    var _available: Int = 1,
     val category_name: String? = null,
     val ingredients: String? = null,
     @get:PropertyName("is_featured") @set:PropertyName("is_featured") var is_featured: Boolean = false,

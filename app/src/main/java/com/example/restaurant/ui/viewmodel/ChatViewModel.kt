@@ -56,14 +56,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun saveMessages(messagesToSave: List<ChatMessage>) {
-        if (currentUserToken.isEmpty()) return
+        if (currentUserToken.isEmpty() || currentUserToken == "guest") return
         val key = "chat_history_$currentUserToken"
         val json = gson.toJson(messagesToSave)
         sharedPreferences.edit().putString(key, json).apply()
     }
 
     private fun loadMessages() {
-        if (currentUserToken.isEmpty()) return
+        if (currentUserToken.isEmpty() || currentUserToken == "guest") {
+            _messages.value = emptyList()
+            return
+        }
         val key = "chat_history_$currentUserToken"
         val json = sharedPreferences.getString(key, null)
         if (json != null) {

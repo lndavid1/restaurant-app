@@ -41,6 +41,14 @@ import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
 import com.example.restaurant.ui.theme.premiumBackground
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.composed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +65,9 @@ fun HomeScreen(
     val categories by viewModel.categories.collectAsState()
     val products by viewModel.products.collectAsState()
     val cartItems by viewModel.cartItems.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    // Collect pre-computed stock map một lần — tránh gọi blocking function trong LazyColumn items
+    val stockStatusMap by viewModel.productStockStatusMap.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
 
     // derivedStateOf: chỉ tính lại khi products hoặc searchQuery đổi
@@ -66,8 +77,6 @@ fun HomeScreen(
             else products.filter { it.name.contains(searchQuery, ignoreCase = true) }
         }
     }
-    
-    val ingredients by viewModel.ingredients.collectAsState() // Để viewmodel biết thay đổi kho
 
     LaunchedEffect(Unit) {
         viewModel.fetchCategories()
@@ -184,28 +193,37 @@ fun HomeScreen(
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(categories) { category ->
-                        Surface(
-                            onClick = { viewModel.fetchProducts(category.id) },
-                            shape = RoundedCornerShape(24.dp),
-                            color = Color.White,
-                            shadowElevation = 3.dp,
-                            border = BorderStroke(1.dp, WarmBrown.copy(alpha = 0.2f))
-                        ) {
-                            Text(
-                                text = category.name,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = WarmBrown
-                            )
+                    if (categories.isEmpty() && isLoading) {
+                        items(5) { SkeletonCategoryItem() }
+                    } else {
+                        items(categories) { category ->
+                            Surface(
+                                onClick = { viewModel.fetchProducts(category.id) },
+                                shape = RoundedCornerShape(24.dp),
+                                color = Color.White,
+                                shadowElevation = 3.dp,
+                                border = BorderStroke(1.dp, WarmBrown.copy(alpha = 0.2f))
+                            ) {
+                                Text(
+                                    text = category.name,
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = WarmBrown
+                                )
+                            }
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            if (filteredProducts.isEmpty()) {
+            if (filteredProducts.isEmpty() && isLoading) {
+                items(5) {
+                    SkeletonProductItem()
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            } else if (filteredProducts.isEmpty()) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         Text("Không tìm thấy món ăn nào.", color = Color.Gray)
@@ -216,7 +234,8 @@ fun HomeScreen(
                     val quantityInCart = remember(cartItems, product.id) {
                         cartItems.find { it.first.id == product.id }?.second ?: 0
                     }
-                    val stockStatus = viewModel.getProductStockStatus(product)
+                    // O(1) map lookup thay vì gọi hàm blocking trên main thread
+                    val stockStatus = stockStatusMap[product.id] ?: com.example.restaurant.ui.viewmodel.StockStatus.NO_RECIPE
                     ProductCustomerItem(
                         product = product,
                         quantity = quantityInCart,
@@ -407,4 +426,68 @@ fun ProductDetailDialog(product: Product, onDismiss: () -> Unit) {
             }
         }
     )
+}
+
+@Composable
+fun Modifier.shimmerEffect(): Modifier = composed {
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val startOffsetX by transition.animateFloat(
+        initialValue = -2 * size.width.toFloat(),
+        targetValue = 2 * size.width.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000)
+        ),
+        label = "shimmer_x"
+    )
+
+    background(
+        brush = Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFE0E0E0),
+                Color(0xFFF5F5F5),
+                Color(0xFFE0E0E0)
+            ),
+            start = Offset(startOffsetX, 0f),
+            end = Offset(startOffsetX + size.width.toFloat(), size.height.toFloat())
+        )
+    ).onGloballyPositioned { size = it.size }
+}
+
+@Composable
+fun SkeletonCategoryItem() {
+    Box(
+        modifier = Modifier
+            .width(100.dp)
+            .height(40.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .shimmerEffect()
+    )
+}
+
+@Composable
+fun SkeletonProductItem() {
+    val config = LocalConfiguration.current
+    val imgSize = (config.screenWidthDp * 0.22f).dp.coerceIn(72.dp, 100.dp)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = Color.White,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.size(imgSize).clip(RoundedCornerShape(16.dp)).shimmerEffect())
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Box(modifier = Modifier.fillMaxWidth(0.8f).height(18.dp).clip(RoundedCornerShape(4.dp)).shimmerEffect())
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(modifier = Modifier.fillMaxWidth(0.5f).height(14.dp).clip(RoundedCornerShape(4.dp)).shimmerEffect())
+                Spacer(modifier = Modifier.height(12.dp))
+                Box(modifier = Modifier.fillMaxWidth(0.4f).height(20.dp).clip(RoundedCornerShape(4.dp)).shimmerEffect())
+            }
+        }
+    }
 }

@@ -46,17 +46,13 @@ object SoundManager {
         lastPlayedTimeMap[soundKey] = currentTime
 
         try {
-            if (mediaPlayer == null) {
-                val defaultUri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                mediaPlayer = MediaPlayer.create(context.applicationContext, defaultUri)
-
-                mediaPlayer?.setOnCompletionListener {
-                    // Release sau khi ph\u00e1t xong \u2014 tr\u00e1nh audio resource leak 🎧
-                    it.release()
-                    mediaPlayer = null
-                }
-            } else {
-                mediaPlayer?.seekTo(0)
+            // Luôn release và tạo mới để tránh IllegalStateException khi player ở trạng thái lỗi
+            release()
+            val defaultUri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            mediaPlayer = MediaPlayer.create(context.applicationContext, defaultUri)
+            mediaPlayer?.setOnCompletionListener {
+                it.release()
+                mediaPlayer = null
             }
             mediaPlayer?.start()
         } catch (e: Exception) {

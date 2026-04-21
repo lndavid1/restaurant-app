@@ -156,11 +156,39 @@ class RestaurantViewModel : ViewModel() {
     private var currentObservingToken = ""
     private val observingJobs = mutableListOf<kotlinx.coroutines.Job>()
 
-    val knownPaidIds = mutableSetOf<Int>()
-    val knownPendingIds = mutableSetOf<Int>()
-    val knownReqIds = mutableSetOf<Int>()
-    val knownCallingIds = mutableSetOf<Int>()
-    val knownCompletedIds = mutableSetOf<Int>()
+    private val _knownPaidIds = mutableSetOf<Int>()
+    val knownPaidIds: Set<Int> get() = _knownPaidIds
+
+    private val _knownPendingIds = mutableSetOf<Int>()
+    val knownPendingIds: Set<Int> get() = _knownPendingIds
+
+    fun markPaidIdsAsSeen(ids: Set<Int>) {
+        _knownPaidIds.addAll(ids)
+    }
+
+    fun markPendingIdsAsSeen(ids: Set<Int>) {
+        _knownPendingIds.addAll(ids)
+    }
+    private val _knownReqIds = mutableSetOf<Int>()
+    val knownReqIds: Set<Int> get() = _knownReqIds
+
+    private val _knownCallingIds = mutableSetOf<Int>()
+    val knownCallingIds: Set<Int> get() = _knownCallingIds
+
+    private val _knownCompletedIds = mutableSetOf<Int>()
+    val knownCompletedIds: Set<Int> get() = _knownCompletedIds
+
+    fun markReqIdsAsSeen(ids: Set<Int>) {
+        _knownReqIds.addAll(ids)
+    }
+
+    fun markCallingIdsAsSeen(ids: Set<Int>) {
+        _knownCallingIds.addAll(ids)
+    }
+
+    fun markCompletedIdsAsSeen(ids: Set<Int>) {
+        _knownCompletedIds.addAll(ids)
+    }
 
     fun startObservingData(token: String) {
         // Khởi động SSOT products observer nếu chưa chạy
@@ -184,7 +212,7 @@ class RestaurantViewModel : ViewModel() {
                 .flowOn(kotlinx.coroutines.Dispatchers.Default)  // Firestore parse off main thread
                 .collect { list ->
                     if (isFirstEmitTables) {
-                        knownCallingIds.addAll(list.filter { it.needs_service }.map { it.id })
+                        _knownCallingIds.addAll(list.filter { it.needs_service }.map { it.id })
                         isFirstEmitTables = false
                     }
                     _tables.value = list
@@ -197,10 +225,10 @@ class RestaurantViewModel : ViewModel() {
                 .flowOn(kotlinx.coroutines.Dispatchers.Default)  // Firestore parse off main thread
                 .collect { list ->
                     if (isFirstEmitOrders) {
-                        knownPaidIds.addAll(list.filter { it.payment_status == "paid" }.map { it.id })
-                        knownPendingIds.addAll(list.filter { it.order_status == "pending" }.map { it.id })
-                        knownReqIds.addAll(list.filter { it.payment_status == "requested" || it.payment_status == "cash_requested" || it.payment_status == "online_requested" }.map { it.id })
-                        knownCompletedIds.addAll(list.filter { it.order_status == "completed" }.map { it.id })
+                        _knownPaidIds.addAll(list.filter { it.payment_status == "paid" }.map { it.id })
+                        _knownPendingIds.addAll(list.filter { it.order_status == "pending" }.map { it.id })
+                        _knownReqIds.addAll(list.filter { it.payment_status == "requested" || it.payment_status == "cash_requested" || it.payment_status == "online_requested" }.map { it.id })
+                        _knownCompletedIds.addAll(list.filter { it.order_status == "completed" }.map { it.id })
                         isFirstEmitOrders = false
                     }
                     _orders.value = list

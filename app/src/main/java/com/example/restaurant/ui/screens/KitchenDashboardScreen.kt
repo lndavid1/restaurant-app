@@ -123,7 +123,7 @@ fun KitchenDashboardScreen(
                         if (newlyPending.isNotEmpty()) {
                             com.example.restaurant.utils.SoundManager.playNewOrderSound(ctx)
                         }
-                        viewModel.knownPendingIds.addAll(newlyPending)
+                        viewModel.markPendingIdsAsSeen(newlyPending)
                     }
 
                     Box(

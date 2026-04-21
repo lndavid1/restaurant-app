@@ -27,28 +27,30 @@ class AdminAnalyticsViewModel(application: Application) : AndroidViewModel(appli
     private val _insightState = MutableStateFlow(AIInsightState())
     val insightState: StateFlow<AIInsightState> = _insightState.asStateFlow()
 
-    private val generativeModel = Firebase.ai(backend = GenerativeBackend.vertexAI()).generativeModel(
-        modelName = "gemini-2.5-flash",
-        systemInstruction = content {
-            text("""
-                Bạn là Giám đốc Vận hành (COO) chuyên nghiệp của hệ thống nhà hàng. 
-                BẮT BUỘC TRẢ VỀ DUY NHẤT MỘT PHẢN HỒI JSON HỢP LỆ VỚI CẤU TRÚC SAU (không dùng markdown code blocks như ```json):
-                {
-                  "summary": ["Doanh thu bình quân...", "Ngày cao nhất..."],
-                  "patterns": ["Thứ 7 khách tăng vọt", "Ngày rớt khách..."],
-                  "actions": ["Tăng tồn kho món A...", "Chạy Flash Sale món B..."]
-                }
-                Quy tắc viêt Insight:
-                - Khẩu quyết: "Nói nhanh, nói gắt, nói trúng". 
-                - 1 insight = 1 ý ngắn gọn, súc tích. Không dùng văn xuôi dài dòng.
-                - Báo cáo số tiền VÀO TRỰC TIẾP insight. Dữ liệu tôi gửi đã được format chuẩn VND (VD: 5,000,000 VND), BẠN KHÔNG ĐƯỢC TỰ Ý ĐỔI TỶ GIÁ THÀNH VÀI TỶ HOẶC VÀI TRĂM TRIỆU.
-            """.trimIndent())
-        },
-        generationConfig = generationConfig {
-            temperature = 0.2f // Giảm gắt nhiệt độ để tránh AI ngẫu hứng hỏng form JSON
-            responseMimeType = "application/json" // Ép cứng JSON format
-        }
-    )
+    private val generativeModel by lazy {
+        Firebase.ai(backend = GenerativeBackend.vertexAI()).generativeModel(
+            modelName = "gemini-2.5-flash",
+            systemInstruction = content {
+                text("""
+                    Bạn là Giám đốc Vận hành (COO) chuyên nghiệp của hệ thống nhà hàng. 
+                    BẮT BUỘC TRẢ VỀ DUY NHẤT MỘT PHẢN HỒI JSON HỢP LỆ VỚI CẤU TRÚC SAU (không dùng markdown code blocks như ```json):
+                    {
+                      "summary": ["Doanh thu bình quân...", "Ngày cao nhất..."],
+                      "patterns": ["Thứ 7 khách tăng vọt", "Ngày rớt khách..."],
+                      "actions": ["Tăng tồn kho món A...", "Chạy Flash Sale món B..."]
+                    }
+                    Quy tắc viêt Insight:
+                    - Khẩu quyết: "Nói nhanh, nói gắt, nói trúng". 
+                    - 1 insight = 1 ý ngắn gọn, súc tích. Không dùng văn xuôi dài dòng.
+                    - Báo cáo số tiền VÀO TRỰC TIẾP insight. Dữ liệu tôi gửi đã được format chuẩn VND (VD: 5,000,000 VND), BẠN KHÔNG ĐƯỢC TỰ Ý ĐỔI TỶ GIÁ THÀNH VÀI TỶ HOẶC VÀI TRĂM TRIỆU.
+                """.trimIndent())
+            },
+            generationConfig = generationConfig {
+                temperature = 0.2f // Giảm gắt nhiệt độ để tránh AI ngẫu hứng hỏng form JSON
+                responseMimeType = "application/json" // Ép cứng JSON format
+            }
+        )
+    }
 
     fun generateInsights(orders: List<Order>, revenues: List<DailyRevenue>) {
         if (_insightState.value.isLoading) return

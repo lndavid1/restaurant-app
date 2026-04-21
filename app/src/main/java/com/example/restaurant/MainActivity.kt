@@ -1,5 +1,7 @@
 package com.example.restaurant
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -36,19 +38,59 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /**
+     * Được gọi khi app đang chạy (singleTask) và nhận deep link từ browser
+     * (ví dụ: restaurantapp://payment?status=PAID sau khi PayOS redirect).
+     * Không cần xử lý gì đặc biệt — polling đã chạy ngầm qua startPayOSPolling.
+     * Override này chỉ cần tồn tại để Android không tạo Activity mới.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
 }
 
 @Composable
 fun RestaurantApp() {
     val navController = rememberNavController()
-    var userToken by remember { mutableStateOf<String?>(null) }
-    var currentUserRole by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Lưu session vào SharedPreferences để survive background process kill
+    // (xảy ra khi user rời app sang browser thanh toán PayOS/VNPAY)
+    val prefs = remember { context.getSharedPreferences("restaurant_session", Context.MODE_PRIVATE) }
+
+    var userToken by remember { mutableStateOf<String?>(prefs.getString("user_token", null)) }
+    var currentUserRole by remember { mutableStateOf<String?>(prefs.getString("user_role", null)) }
     var currentTableId by remember { mutableIntStateOf(0) }
-    
+
     val restaurantViewModel: RestaurantViewModel = viewModel()
     val authViewModel: AuthViewModel = viewModel()
 
-    NavHost(navController = navController, startDestination = Screen.Splash.route) {
+    // Helper lưu / xóa session
+    val saveSession: (String, String) -> Unit = { token, role ->
+        prefs.edit().putString("user_token", token).putString("user_role", role).apply()
+    }
+    val clearSession: () -> Unit = {
+        prefs.edit().remove("user_token").remove("user_role").apply()
+    }
+
+    // Nếu đã có session (quay lại sau khi thanh toán), bỏ qua Splash → thẳng dashboard
+    // remember: startDestination của NavHost chỉ đọc 1 lần — không cần tính lại mỗi recompose
+    val startDest = remember(userToken, currentUserRole) {
+        if (!userToken.isNullOrBlank()) {
+            when (currentUserRole) {
+                "admin" -> Screen.AdminDashboard.route
+                "employee" -> Screen.TableMap.route
+                "kitchen" -> Screen.KitchenDashboard.route
+                else -> Screen.CustomerDashboard.route
+            }
+        } else {
+            Screen.Splash.route
+        }
+    }
+
+    NavHost(navController = navController, startDestination = startDest) {
         composable(Screen.Splash.route) {
             SplashScreen(onNext = {
                 navController.navigate(Screen.Login.route) { popUpTo(Screen.Splash.route) { inclusive = true } }
@@ -60,12 +102,13 @@ fun RestaurantApp() {
                 onLoginSuccess = { token, role ->
                     userToken = token
                     currentUserRole = role
+                    saveSession(token, role)
                     when (role) {
                         "admin" -> navController.navigate(Screen.AdminDashboard.route) { popUpTo(Screen.Login.route) { inclusive = true } }
                         "employee" -> navController.navigate(Screen.TableMap.route) { popUpTo(Screen.Login.route) { inclusive = true } }
                         "kitchen" -> navController.navigate(Screen.KitchenDashboard.route) { popUpTo(Screen.Login.route) { inclusive = true } }
-                        else -> navController.navigate(Screen.CustomerDashboard.route) { 
-                            popUpTo(Screen.Login.route) { inclusive = true } 
+                        else -> navController.navigate(Screen.CustomerDashboard.route) {
+                            popUpTo(Screen.Login.route) { inclusive = true }
                         }
                     }
                 }
@@ -77,12 +120,13 @@ fun RestaurantApp() {
                 onRegisterSuccess = { token, role ->
                     userToken = token
                     currentUserRole = role
+                    saveSession(token, role)
                     when (role) {
                         "admin" -> navController.navigate(Screen.AdminDashboard.route) { popUpTo(Screen.Register.route) { inclusive = true } }
                         "employee" -> navController.navigate(Screen.TableMap.route) { popUpTo(Screen.Register.route) { inclusive = true } }
                         "kitchen" -> navController.navigate(Screen.KitchenDashboard.route) { popUpTo(Screen.Register.route) { inclusive = true } }
-                        else -> navController.navigate(Screen.CustomerDashboard.route) { 
-                            popUpTo(Screen.Register.route) { inclusive = true } 
+                        else -> navController.navigate(Screen.CustomerDashboard.route) {
+                            popUpTo(Screen.Register.route) { inclusive = true }
                         }
                     }
                 }
@@ -104,11 +148,12 @@ fun RestaurantApp() {
                     onNavigateToChatbot = {
                         navController.navigate(Screen.Chatbot.route)
                     },
-                    onLogout = { 
+                    onLogout = {
                         restaurantViewModel.clearAllData()
+                        clearSession()
                         userToken = null
                         currentUserRole = null
-                        navController.navigate(Screen.Login.route) { popUpTo(0) } 
+                        navController.navigate(Screen.Login.route) { popUpTo(0) }
                     },
                     onBack = { navController.popBackStack() }
                 )
@@ -150,6 +195,7 @@ fun RestaurantApp() {
                         }
                         currentTableId = 0
                         restaurantViewModel.clearAllData()
+                        clearSession()
                         userToken = null
                         currentUserRole = null
                         navController.navigate(Screen.Login.route) { popUpTo(0) }
@@ -202,6 +248,7 @@ fun RestaurantApp() {
                     },
                     onLogout = {
                         restaurantViewModel.clearAllData()
+                        clearSession()
                         userToken = null
                         currentUserRole = null
                         navController.navigate(Screen.Login.route) { popUpTo(0) }
@@ -215,11 +262,12 @@ fun RestaurantApp() {
                 AdminDashboardScreen(
                     token = token,
                     viewModel = restaurantViewModel,
-                    onLogout = { 
+                    onLogout = {
                         restaurantViewModel.clearAllData()
+                        clearSession()
                         userToken = null
                         currentUserRole = null
-                        navController.navigate(Screen.Login.route) { popUpTo(0) } 
+                        navController.navigate(Screen.Login.route) { popUpTo(0) }
                     }
                 )
             }
@@ -229,11 +277,12 @@ fun RestaurantApp() {
                 KitchenDashboardScreen(
                     token = token,
                     viewModel = restaurantViewModel,
-                    onLogout = { 
+                    onLogout = {
                         restaurantViewModel.clearAllData()
+                        clearSession()
                         userToken = null
                         currentUserRole = null
-                        navController.navigate(Screen.Login.route) { popUpTo(0) } 
+                        navController.navigate(Screen.Login.route) { popUpTo(0) }
                     }
                 )
             }

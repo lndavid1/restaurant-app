@@ -102,7 +102,7 @@ fun TableMapScreen(
             }
         }
         
-        viewModel.knownPaidIds.addAll(newlyPaid)
+        viewModel.markPaidIdsAsSeen(newlyPaid)
     }
 
     // Dialog xác nhận phía nhân viên: "QR đã hiển thị trên màn hình khách"
@@ -363,7 +363,7 @@ fun TableMapScreen(
             android.widget.Toast.makeText(context, "🔔 Nhận được yêu cầu thanh toán mới!", android.widget.Toast.LENGTH_LONG).show()
             com.example.restaurant.utils.SoundManager.playPaymentRequestSound(context)
         }
-        viewModel.knownReqIds.addAll(newlyReq)
+        viewModel.markReqIdsAsSeen(newlyReq)
     }
     
     LaunchedEffect(tables) {
@@ -374,7 +374,7 @@ fun TableMapScreen(
             android.widget.Toast.makeText(context, "🔔 Khách đang gọi phục vụ!", android.widget.Toast.LENGTH_LONG).show()
             com.example.restaurant.utils.SoundManager.playCallStaffSound(context)
         }
-        viewModel.knownCallingIds.addAll(newlyCalling)
+        viewModel.markCallingIdsAsSeen(newlyCalling)
     }
     
     LaunchedEffect(viewModel) {

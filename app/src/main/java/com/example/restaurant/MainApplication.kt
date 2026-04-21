@@ -15,10 +15,15 @@ class MainApplication : Application(), ImageLoaderFactory {
         super.onCreate()
         FirebaseApp.initializeApp(this)
         // Cài App Check để firebase-ai không warning 'No AppCheckProvider installed'
-        // DebugAppCheckProviderFactory chỉ dùng cho debug build — release cần Play Integrity
-        FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
-            DebugAppCheckProviderFactory.getInstance()
-        )
+        if (BuildConfig.DEBUG) {
+            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                DebugAppCheckProviderFactory.getInstance()
+            )
+        } else {
+            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance()
+            )
+        }
     }
 
     override fun newImageLoader(): ImageLoader {

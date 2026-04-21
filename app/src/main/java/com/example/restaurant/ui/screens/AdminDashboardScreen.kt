@@ -88,6 +88,13 @@ fun AdminDashboardScreen(
         }
     }
 
+    // Đảm bảo observers luôn chạy khi AdminDashboard được hiển thị —
+    // không phụ thuộc vào tab nào được chọn đầu tiên (fix tab Kho NL không có data)
+    LaunchedEffect(token) {
+        viewModel.startObservingData(token)
+        viewModel.fetchInventory()
+    }
+
     // Navigate to invoice detail screen
     if (selectedOrder != null) {
         AdminInvoiceDetailScreen(
@@ -582,6 +589,8 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
     val products by viewModel.products.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val ingredients by viewModel.ingredients.collectAsState()
+    // Collect pre-computed stock map một lần — tránh blocking call trong LazyColumn items
+    val stockStatusMap by viewModel.productStockStatusMap.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
     var selectedProduct by remember { mutableStateOf<Product?>(null) }
     var productToDelete by remember { mutableStateOf<Product?>(null) }
@@ -986,7 +995,7 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("${product.price.toVndFormat()}d", color = WarmBrown, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                 Spacer(Modifier.width(8.dp))
-                                val stockStatus = viewModel.getProductStockStatus(product)
+                                val stockStatus = stockStatusMap[product.id] ?: StockStatus.NO_RECIPE
                                 val (statusText, statusColor) = when (stockStatus) {
                                     StockStatus.OK -> "Con hang" to StatusGreen
                                     StockStatus.LOW_STOCK -> "Sap het" to StatusYellow
@@ -1572,6 +1581,32 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
         viewModel.fetchDailyRevenueHistory()
     }
 
+    val context = LocalContext.current
+    val currentHistory by rememberUpdatedState(history)
+    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    val csvHeader = "\"Ngày\"\t\"Doanh thu (VND)\"\t\"Số lượng đơn\"\n"
+                    // Sắp xếp ngày từ mới nhất đến cũ nhất
+                    val sortedData = currentHistory.sortedByDescending { it.date }
+                    val csvData = sortedData.joinToString("\n") { "\"${it.date}\"\t${it.revenue.toLong()}\t${it.order_count}" }
+                    val csvContent = csvHeader + csvData
+                    // Thêm BOM UTF-16LE để Excel (mọi phiên bản/mọi vùng) hiển thị tiếng Việt chuẩn
+                    // và phân tách cột bằng Tab (Excel mặc định nhận diện Tab cho UTF-16LE CSV)
+                    outputStream.write(byteArrayOf(0xFF.toByte(), 0xFE.toByte()))
+                    outputStream.write(csvContent.toByteArray(Charsets.UTF_16LE))
+                }
+                android.widget.Toast.makeText(context, "Xuất CSV thành công!", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                android.widget.Toast.makeText(context, "Lỗi khi xuất CSV", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     val thisMonthStr = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(Date())
 
@@ -1683,7 +1718,21 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
         }
 
         // --- Lịch sử ---
-        item { Text("Lịch sử doanh thu", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
+        item {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Lịch sử doanh thu", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                if (sortedHistory.isNotEmpty()) {
+                    TextButton(onClick = {
+                        val fileName = "doanh_thu_${thisMonthStr}.csv"
+                        exportLauncher.launch(fileName)
+                    }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+                        Icon(Icons.Default.Download, null, tint = WarmBrown, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Xuất CSV", color = WarmBrown, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
 
         if (sortedHistory.isEmpty()) {
             item {

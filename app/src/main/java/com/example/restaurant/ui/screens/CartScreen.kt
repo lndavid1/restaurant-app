@@ -1,4 +1,4 @@
-﻿package com.example.restaurant.ui.screens
+package com.example.restaurant.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -201,7 +201,7 @@ fun CartScreen(
                         ) {
                             Icon(Icons.Default.ShoppingBag, null, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("XAC NHAN - GUI BEP", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+                            Text("XÁC NHẬN - GỬI BẾP", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
                         }
                     }
                 }
