@@ -1,5 +1,6 @@
 package com.example.restaurant.data.repository
 
+import android.util.Log
 import com.example.restaurant.data.model.*
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
@@ -82,7 +83,28 @@ class RestaurantRepository {
     suspend fun getTables(token: String): List<RestaurantTable> {
         return try {
             val snapshot = firestore.collection("restaurant_tables").get().await()
-            snapshot.toObjects(RestaurantTable::class.java).sortedBy { it.id }
+            val allTables = snapshot.toObjects(RestaurantTable::class.java)
+
+            // Auto-cleanup: xóa bàn rác (không tên hoặc id=0) khỏi Firestore
+            allTables
+                .filter { it.table_number.isBlank() || it.id == 0 }
+                .forEach { bad ->
+                    try {
+                        // Xóa theo document ID thực tế trong Firestore
+                        val docId = snapshot.documents
+                            .find { doc -> doc.toObject(RestaurantTable::class.java)?.id == bad.id
+                                        && doc.toObject(RestaurantTable::class.java)?.table_number == bad.table_number }?.id
+                        if (docId != null) {
+                            firestore.collection("restaurant_tables").document(docId).delete().await()
+                            android.util.Log.w("RestaurantRepo", "Đã xóa bàn rác: docId=$docId, id=${bad.id}, name='${bad.table_number}'")
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("RestaurantRepo", "Lỗi xóa bàn rác", e)
+                    }
+                }
+
+            // Chỉ trả về bàn hợp lệ
+            allTables.filter { it.table_number.isNotBlank() && it.id != 0 }.sortedBy { it.id }
         } catch (e: Exception) { emptyList() }
     }
 
@@ -104,8 +126,25 @@ class RestaurantRepository {
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
-                    val list = snapshot.toObjects(RestaurantTable::class.java).sortedBy { it.id }
-                    trySend(list)
+                    val allTables = snapshot.toObjects(RestaurantTable::class.java)
+
+                    // Auto-cleanup realtime: xóa document rác ngay khi phát hiện
+                    val badDocs = snapshot.documents.filter { doc ->
+                        val t = doc.toObject(RestaurantTable::class.java)
+                        t == null || t.table_number.isBlank() || t.id == 0
+                    }
+                    badDocs.forEach { doc ->
+                        firestore.collection("restaurant_tables").document(doc.id).delete()
+                            .addOnSuccessListener {
+                                android.util.Log.w("RestaurantRepo", "Realtime: đã xóa bàn rác docId=${doc.id}")
+                            }
+                    }
+
+                    // Chỉ emit bàn hợp lệ
+                    val validList = allTables
+                        .filter { it.table_number.isNotBlank() && it.id != 0 }
+                        .sortedBy { it.id }
+                    trySend(validList)
                 }
             }
         awaitClose {
@@ -136,11 +175,11 @@ class RestaurantRepository {
         return try {
             val snapshot = firestore.collection("orders")
                 .whereEqualTo("user_id", userId)
-                .whereEqualTo("payment_status", "paid")
-                .orderBy("id", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(50)
                 .get().await()
             val list = snapshot.toObjects(Order::class.java)
+                .filter { it.payment_status == "paid" }
+                .sortedByDescending { it.id }
+                .take(50)
             Result.success(list)
         } catch (e: Exception) {
             Result.failure(Exception("Lỗi tải lịch sử đơn hàng: ${e.message}"))
@@ -261,6 +300,34 @@ class RestaurantRepository {
             }
             true
         } catch (e: Exception) { false }
+    }
+
+    suspend fun assignTableToCustomer(customerId: String, tableId: Int): Boolean {
+        return try {
+            val newId = kotlin.math.abs(kotlin.random.Random.nextInt())
+            val order = Order(
+                id = newId,
+                user_id = customerId,
+                table_id = tableId,
+                order_type = "dine_in",
+                total_amount = 0.0,
+                discount_amount = 0.0,
+                points_used = 0,
+                voucher_code = null,
+                payment_status = "unpaid",
+                order_status = "pending",
+                created_at = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
+                table_number = "Bàn $tableId",
+                items_detail = emptyList()
+            )
+            firestore.collection("orders").document(newId.toString()).set(order).await()
+            firestore.collection("restaurant_tables").document(tableId.toString())
+                .update("status", "occupied").await()
+            true
+        } catch (e: Exception) {
+            Log.e("RestaurantRepo", "Error assigning table", e)
+            false
+        }
     }
 
     suspend fun updateOrderStatus(token: String, orderId: Int, status: String): Boolean {
@@ -967,7 +1034,9 @@ class RestaurantRepository {
                         return@runTransaction
                     }
                     val currentPoints = snapshot.getLong("loyaltyPoints") ?: 0L
+                    val totalLoyaltyPoints = snapshot.getLong("totalLoyaltyPoints") ?: currentPoints
                     transaction.update(userRef, "loyaltyPoints", currentPoints + pointsToAdd)
+                    transaction.update(userRef, "totalLoyaltyPoints", totalLoyaltyPoints + pointsToAdd)
                 }.await()
                 android.util.Log.d("Loyalty", "Successfully added points to $userId")
             }
@@ -987,9 +1056,32 @@ class RestaurantRepository {
                 comment = comment,
                 created_at = System.currentTimeMillis()
             )
-            firestore.collection("reviews").document(reviewId).set(review).await()
+            
+            val productRef = firestore.collection("products").document(productId.toString())
+            val reviewRef = firestore.collection("reviews").document(reviewId)
+
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(productRef)
+                
+                // Nếu sản phẩm không tồn tại (có thể đã bị xoá khỏi Menu),
+                // ta vẫn lưu review nhưng bỏ qua bước cập nhật trung bình.
+                if (snapshot.exists()) {
+                    val currentAvg = snapshot.getDouble("average_rating") ?: 0.0
+                    val currentCount = snapshot.getLong("review_count") ?: 0L
+                    
+                    val newCount = currentCount + 1
+                    val newAvg = ((currentAvg * currentCount) + rating) / newCount
+                    
+                    transaction.update(productRef, "average_rating", newAvg)
+                    transaction.update(productRef, "review_count", newCount)
+                }
+                
+                transaction.set(reviewRef, review)
+            }.await()
+            
             true
         } catch (e: Exception) {
+            android.util.Log.e("Review", "Failed to submit review", e)
             false
         }
     }

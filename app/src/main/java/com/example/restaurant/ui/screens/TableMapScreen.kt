@@ -17,7 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
@@ -383,140 +383,140 @@ fun TableMapScreen(
         }
     }
 
-
-    Scaffold(
-        containerColor = CreamBG,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToChatbot,
-                shape = CircleShape,
-                containerColor = Color.White,
-                contentColor = WarmBrown
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.app_logo),
-                    contentDescription = "Trợ lý món ăn",
-                    modifier = Modifier.size(56.dp).clip(CircleShape),
-                    contentScale = ContentScale.Crop
-                )
-            }
-        },
-        bottomBar = {
-            Box(
+    Box(modifier = Modifier.fillMaxSize().background(CreamBG)) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0)
+        ) { _ ->
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .fillMaxSize()
+                    .background(CreamBG)
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
-                    color = Color.White,
-                    shadowElevation = 16.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Tab Sơ đồ bàn
-                        val navItems = listOf(
-                            Triple("Sơ đồ bàn", Icons.Default.TableRestaurant, 0),
-                            Triple("Thanh toán", Icons.Default.AttachMoney, 1)
+                when (selectedTab) {
+                    0 -> EmployeeTableMapTab(
+                        token = token,
+                        viewModel = viewModel,
+                        tables = tables,
+                        orders = orders,
+                        onTableSelected = onTableSelected,
+                        onLogout = onLogout,
+                        showActionDialog = showActionDialog,
+                        onShowDialog = { table ->
+                            selectedTable = table
+                            if (table.needs_service) {
+                                showServiceDialog = true // ưu tiên hiện dialog phục vụ trước
+                            } else {
+                                showActionDialog = true
+                            }
+                        }
+                    )
+                    1 -> EmployeePaymentTab(
+                        token = token,
+                        viewModel = viewModel,
+                        orders = paymentRequests,
+                        onVnPayClick = { order ->
+                            val url = com.example.restaurant.utils.VNPayHelper.generatePaymentUrl(order.id.toString(), order.total_amount)
+                            viewModel.saveVnpayUrlToOrder(order.id, url)
+                            vnpayOrder = order
+                            showVnpaySentDialog = true
+                        }
+                    )
+                    2 -> {
+                        val reservationViewModel: com.example.restaurant.ui.viewmodel.ReservationViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                        com.example.restaurant.ui.screens.ReservationManagementScreen(
+                            reservationViewModel = reservationViewModel,
+                            restaurantViewModel = viewModel,
+                            onNavigateBack = { selectedTab = 0 } // Hoặc làm gì đó nếu cần
                         )
-                        navItems.forEach { (label, icon, index) ->
-                            val isSelected = selectedTab == index
-                            val scale by animateFloatAsState(
-                                targetValue = if (isSelected) 1f else 0.85f,
-                                animationSpec = spring(dampingRatio = 0.5f),
-                                label = "navScale"
-                            )
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                    }
+                }
+            }
+        }
+
+        // Nav pill nổi trực tiếp trên background
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                color = Color.White,
+                shadowElevation = 24.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Tab Sơ đồ bàn
+                    val navItems = listOf(
+                        Triple("Sơ đồ bàn", Icons.Default.TableRestaurant, 0),
+                        Triple("Thanh toán", Icons.Default.AttachMoney, 1),
+                        Triple("Đặt bàn", Icons.Default.EventSeat, 2)
+                    )
+                    navItems.forEach { (label, icon, index) ->
+                        val isSelected = selectedTab == index
+                        val scale by animateFloatAsState(
+                            targetValue = if (isSelected) 1f else 0.85f,
+                            animationSpec = spring(dampingRatio = 0.5f),
+                            label = "navScale"
+                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { selectedTab = index }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { selectedTab = index }
-                                    .padding(vertical = 4.dp)
+                                    .graphicsLayer { scaleX = scale; scaleY = scale }
+                                    .background(
+                                        if (isSelected) WarmBrown.copy(alpha = 0.12f) else Color.Transparent,
+                                        shape = RoundedCornerShape(14.dp)
+                                    )
+                                    .padding(horizontal = 18.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .graphicsLayer { scaleX = scale; scaleY = scale }
-                                        .background(
-                                            if (isSelected) WarmBrown.copy(alpha = 0.12f) else Color.Transparent,
-                                            shape = RoundedCornerShape(14.dp)
-                                        )
-                                        .padding(horizontal = 18.dp, vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    BadgedBox(
-                                        badge = {
-                                            val count = if (index == 0) callingCount else if (index == 1) requestedCount else 0
-                                            if (count > 0) {
-                                                Badge(containerColor = Color.Red) {
-                                                    Text(count.toString(), fontSize = 10.sp)
-                                                }
+                                BadgedBox(
+                                    badge = {
+                                        val count = if (index == 0) callingCount else if (index == 1) requestedCount else 0
+                                        if (count > 0) {
+                                            Badge(containerColor = Color.Red) {
+                                                Text(count.toString(), fontSize = 10.sp)
                                             }
                                         }
-                                    ) {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = label,
-                                            tint = if (isSelected) WarmBrown else Color(0xFFADB5BD),
-                                            modifier = Modifier.size(22.dp)
-                                        )
                                     }
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = label,
+                                        tint = if (isSelected) WarmBrown else Color(0xFFADB5BD),
+                                        modifier = Modifier.size(22.dp)
+                                    )
                                 }
-                                Text(
-                                    text = label,
-                                    fontSize = 10.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) WarmBrown else Color(0xFFADB5BD)
-                                )
                             }
+                            Text(
+                                text = label,
+                                fontSize = 10.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) WarmBrown else Color(0xFFADB5BD)
+                            )
                         }
                     }
                 }
             }
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(CreamBG)
-        ) {
-            when (selectedTab) {
-                0 -> EmployeeTableMapTab(
-                    token = token,
-                    viewModel = viewModel,
-                    tables = tables,
-                    orders = orders,
-                    onTableSelected = onTableSelected,
-                    onLogout = onLogout,
-                    showActionDialog = showActionDialog,
-                    onShowDialog = { table ->
-                        selectedTable = table
-                        if (table.needs_service) {
-                            showServiceDialog = true // ưu tiên hiện dialog phục vụ trước
-                        } else {
-                            showActionDialog = true
-                        }
-                    }
-                )
-                1 -> EmployeePaymentTab(
-                    token = token,
-                    viewModel = viewModel,
-                    orders = paymentRequests,
-                    onVnPayClick = { order ->
-                        val url = com.example.restaurant.utils.VNPayHelper.generatePaymentUrl(order.id.toString(), order.total_amount)
-                        viewModel.saveVnpayUrlToOrder(order.id, url)
-                        vnpayOrder = order
-                        showVnpaySentDialog = true
-                    }
-                )
-            }
-        }
+
+        // FAB kéo thả — đặt ngoài Scaffold để không bị system navbar che
+        DraggableChatbotFab(onClick = onNavigateToChatbot)
     }
 }
 
@@ -565,7 +565,7 @@ fun EmployeeTableMapTab(
                         val isSoundEnabled by com.example.restaurant.utils.SoundManager.isSoundEnabled.collectAsState()
                         IconButton(onClick = { com.example.restaurant.utils.SoundManager.toggleSound() }) {
                             Icon(
-                                if (isSoundEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff, 
+                                if (isSoundEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff, 
                                 contentDescription = "Bật/tắt âm thanh", 
                                 tint = Color.White, 
                                 modifier = Modifier.size(22.dp)
@@ -981,7 +981,7 @@ fun EmployeePaymentTab(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.ReceiptLong, null, tint = statusColor, modifier = Modifier.size(20.dp))
+                                        Icon(Icons.AutoMirrored.Filled.ReceiptLong, null, tint = statusColor, modifier = Modifier.size(20.dp))
                                         Spacer(Modifier.width(8.dp))
                                         Text(
                                             "Mã đơn: #${order.id}", 
@@ -1025,7 +1025,7 @@ fun EmployeePaymentTab(
                                                 order.payment_status == "online_requested" -> Icons.Default.Receipt
                                                 isRequested -> Icons.Default.NotificationsActive
                                                 order.payment_status == "payment_approved" -> Icons.Default.HourglassTop
-                                                else -> Icons.Default.Help
+                                                else -> Icons.AutoMirrored.Filled.Help
                                             }
                                             Icon(
                                                 iconState,

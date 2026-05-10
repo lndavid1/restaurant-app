@@ -48,16 +48,37 @@ object SoundManager {
         try {
             // Luôn release và tạo mới để tránh IllegalStateException khi player ở trạng thái lỗi
             release()
-            val defaultUri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            mediaPlayer = MediaPlayer.create(context.applicationContext, defaultUri)
-            mediaPlayer?.setOnCompletionListener {
-                it.release()
-                mediaPlayer = null
+            
+            // 1. Ưu tiên kiểm tra xem user có chép file nhạc riêng vào res/raw không
+            val resId = context.resources.getIdentifier(soundKey, "raw", context.packageName)
+            if (resId != 0) {
+                mediaPlayer = MediaPlayer.create(context.applicationContext, resId)
+            } else {
+                // 2. Không có file riêng, sử dụng âm thanh hệ thống mặc định
+                val defaultUri: Uri? = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                if (defaultUri != null) {
+                    mediaPlayer = MediaPlayer.create(context.applicationContext, defaultUri)
+                }
             }
-            mediaPlayer?.start()
+            
+            if (mediaPlayer != null) {
+                mediaPlayer?.setOnCompletionListener {
+                    it.release()
+                    mediaPlayer = null
+                }
+                mediaPlayer?.start()
+            } else {
+                // 3. Fallback: Máy ảo bị lỗi Ringtone và không có file raw
+                val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
+                toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 300)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             release()
+            try {
+                val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
+                toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 300)
+            } catch (ex: Exception) {}
         }
     }
 

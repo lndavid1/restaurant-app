@@ -111,6 +111,12 @@ class RestaurantViewModel : ViewModel() {
         _cartItems.value = currentItems
     }
 
+    fun deleteItemFromCart(product: Product) {
+        val currentItems = _cartItems.value.toMutableList()
+        currentItems.removeAll { it.first.id == product.id }
+        _cartItems.value = currentItems
+    }
+
     fun clearCart() { _cartItems.value = emptyList() }
 
     fun fetchCategories() {
@@ -516,6 +522,19 @@ class RestaurantViewModel : ViewModel() {
         if (tableId == 0) return
         viewModelScope.launch {
             repository.releaseTableIfEmpty(token, tableId)
+        }
+    }
+
+    fun assignTableToCustomer(customerId: String, tableId: Int, onComplete: () -> Unit) {
+        if (tableId == 0) return
+        viewModelScope.launch {
+            val success = repository.assignTableToCustomer(customerId, tableId)
+            if (success) {
+                _toastMessage.emit("Gán bàn thành công!")
+                onComplete()
+            } else {
+                _toastMessage.emit("Lỗi khi gán bàn")
+            }
         }
     }
 

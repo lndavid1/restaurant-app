@@ -25,6 +25,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.draw.clip
@@ -47,6 +48,7 @@ import android.view.ViewGroup
 import coil.compose.AsyncImage
 import com.example.restaurant.ui.theme.CreamBG
 import com.example.restaurant.ui.theme.StatusGreen
+import com.example.restaurant.ui.theme.StatusRed
 import com.example.restaurant.ui.theme.WarmBrown
 import com.example.restaurant.ui.viewmodel.AuthState
 import com.example.restaurant.ui.viewmodel.AuthViewModel
@@ -58,6 +60,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.example.restaurant.utils.toVndFormat
 import com.example.restaurant.ui.theme.premiumBackground
+import com.example.restaurant.ui.viewmodel.NotificationViewModel
+import com.example.restaurant.ui.viewmodel.VoucherViewModel
+import com.example.restaurant.data.model.Voucher
 
 @OptIn(
     androidx.compose.foundation.ExperimentalFoundationApi::class,
@@ -74,12 +79,16 @@ fun CustomerDashboardScreen(
     onRequestPayment: (Int, Int, Double) -> Unit,
     onNavigateToChatbot: () -> Unit,
     onNavigateToOrderHistory: () -> Unit,
+    onNavigateToReservation: () -> Unit,
+    onNavigateToReservationHistory: () -> Unit,
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var homeClickCount by remember { mutableIntStateOf(0) }
     val orders by restaurantViewModel.orders.collectAsState()
     val products by restaurantViewModel.products.collectAsState()
+    val notificationViewModel: NotificationViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val voucherViewModel: VoucherViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -89,6 +98,7 @@ fun CustomerDashboardScreen(
         restaurantViewModel.fetchProducts()
         restaurantViewModel.fetchOrders(token)
         restaurantViewModel.fetchInventory()
+        notificationViewModel.fetchUserNotifications(token)
     }
 
     LaunchedEffect(restaurantViewModel) {
@@ -155,139 +165,142 @@ fun CustomerDashboardScreen(
     }
 
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize().premiumBackground(),
-        containerColor = Color.Transparent,
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToChatbot,
-                shape = CircleShape,
-                containerColor = Color.White,
-                contentColor = WarmBrown
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.app_logo),
-                    contentDescription = "Trợ lý món ăn",
-                    modifier = Modifier.size(56.dp).clip(CircleShape),
-                    contentScale = ContentScale.Crop
-                )
+    Box(modifier = Modifier.fillMaxSize().premiumBackground()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+            snackbarHost = { SnackbarHost(snackbarHostState) }
+        ) { _ ->
+            Column(modifier = Modifier.fillMaxSize()) {
+                when (selectedTab) {
+                    0 -> HomeTab(
+                        token = token,
+                        homeClickCount = homeClickCount,
+                        restaurantViewModel = restaurantViewModel,
+                        authViewModel = authViewModel,
+                        notificationViewModel = notificationViewModel,
+                        voucherViewModel = voucherViewModel,
+                        onNavigateToTable = onNavigateToTable,
+                        onNavigateToTakeaway = onNavigateToTakeaway,
+                        onNavigateToMyTable = { selectedTab = 1 },
+                        onNavigateToReservation = onNavigateToReservation,
+                        onNavigateToChatbot = onNavigateToChatbot,
+                        onLogout = onLogout
+                    )
+                    1 -> NotificationsTab(
+                        token = token,
+                        restaurantViewModel = restaurantViewModel,
+                        authViewModel = authViewModel,
+                        voucherViewModel = voucherViewModel,
+                        onOrderMore = onOrderMore,
+                        onRequestPayment = onRequestPayment,
+                        snackbarHostState = snackbarHostState
+                    )
+                    2 -> AboutTab(mapWebView = mapWebView)
+                    3 -> SettingsTab(
+                        token = token,
+                        authViewModel = authViewModel,
+                        onNavigateToOrderHistory = onNavigateToOrderHistory,
+                        onNavigateToReservationHistory = onNavigateToReservationHistory,
+                        onLogout = onLogout
+                    )
+                }
             }
-        },
-        bottomBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+        }
+
+        // Nav pill nổi trực tiếp trên background — không qua Scaffold bottomBar
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                color = Color.White,
+                shadowElevation = 24.dp
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
-                    color = Color.White,
-                    shadowElevation = 16.dp,
-                    tonalElevation = 4.dp
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val tabs = listOf(
-                            Triple("Home", Icons.Default.Home, 0),
-                            Triple("Thông báo", Icons.Default.Notifications, 1),
-                            Triple("Giới thiệu", Icons.Default.Info, 2),
-                            Triple("Cài đặt", Icons.Default.Settings, 3)
+                    val tabs = listOf(
+                        Triple("Home", Icons.Default.Home, 0),
+                        Triple("Thông báo", Icons.Default.Notifications, 1),
+                        Triple("Giới thiệu", Icons.Default.Info, 2),
+                        Triple("Cài đặt", Icons.Default.Settings, 3)
+                    )
+                    tabs.forEach { (label, icon, index) ->
+                        val isSelected = selectedTab == index
+                        val scale by androidx.compose.animation.core.animateFloatAsState(
+                            targetValue = if (isSelected) 1f else 0.85f,
+                            animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.5f),
+                            label = "navScale"
                         )
-                        tabs.forEach { (label, icon, index) ->
-                            val isSelected = selectedTab == index
-                            val scale by androidx.compose.animation.core.animateFloatAsState(
-                                targetValue = if (isSelected) 1f else 0.85f,
-                                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.5f),
-                                label = "navScale"
-                            )
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { 
-                                        if (index == 0) homeClickCount++
-                                        selectedTab = index 
-                                    }
-                                    .padding(vertical = 4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .graphicsLayer { scaleX = scale; scaleY = scale }
-                                        .background(
-                                            if (isSelected) WarmBrown.copy(alpha = 0.12f) else Color.Transparent,
-                                            shape = RoundedCornerShape(14.dp)
-                                        )
-                                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = label,
-                                        tint = if (isSelected) WarmBrown else Color(0xFFADB5BD),
-                                        modifier = Modifier.size(22.dp)
-                                    )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    if (index == 0) homeClickCount++
+                                    selectedTab = index
                                 }
-                                Text(
-                                    text = label,
-                                    fontSize = 10.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) WarmBrown else Color(0xFFADB5BD)
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .graphicsLayer { scaleX = scale; scaleY = scale }
+                                    .background(
+                                        if (isSelected) WarmBrown.copy(alpha = 0.12f) else Color.Transparent,
+                                        shape = RoundedCornerShape(14.dp)
+                                    )
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = label,
+                                    tint = if (isSelected) WarmBrown else Color(0xFFADB5BD),
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
+                            Text(
+                                text = label,
+                                fontSize = 10.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) WarmBrown else Color(0xFFADB5BD)
+                            )
                         }
                     }
                 }
             }
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-        ) {
-            when (selectedTab) {
-                0 -> HomeTab(
-                    token = token,
-                    homeClickCount = homeClickCount,
-                    restaurantViewModel = restaurantViewModel,
-                    authViewModel = authViewModel,
-                    onNavigateToTable = onNavigateToTable,
-                    onNavigateToTakeaway = onNavigateToTakeaway,
-                    onNavigateToMyTable = { selectedTab = 1 }, // Switch to notifications
-                    onLogout = onLogout
-                )
-                1 -> NotificationsTab(
-                    token = token,
-                    restaurantViewModel = restaurantViewModel,
-                    authViewModel = authViewModel,
-                    onOrderMore = onOrderMore,
-                    onRequestPayment = onRequestPayment,
-                    snackbarHostState = snackbarHostState
-                )
-                2 -> AboutTab(mapWebView = mapWebView)
-                3 -> SettingsTab(token = token, authViewModel = authViewModel, onNavigateToOrderHistory = onNavigateToOrderHistory, onLogout = onLogout)
-            }
-        }
+
+        // FAB kéo thả — đặt ngoài Scaffold để không bị system navbar che
+        DraggableChatbotFab(onClick = onNavigateToChatbot)
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeTab(
     token: String,
     homeClickCount: Int,
     restaurantViewModel: RestaurantViewModel,
     authViewModel: AuthViewModel,
+    notificationViewModel: NotificationViewModel,
+    voucherViewModel: VoucherViewModel,
     onNavigateToTable: () -> Unit,
     onNavigateToTakeaway: () -> Unit,
     onNavigateToMyTable: () -> Unit,
+    onNavigateToReservation: () -> Unit,
+    onNavigateToChatbot: () -> Unit,
     onLogout: () -> Unit
 ) {
     val screenConfig = LocalConfiguration.current
@@ -297,6 +310,10 @@ fun HomeTab(
     val likedProducts = (userProfile?.get("liked_products") as? List<Number>)?.map { it.toInt() } ?: emptyList()
     val products by restaurantViewModel.products.collectAsState()
     val orders by restaurantViewModel.orders.collectAsState()
+    val vouchers by voucherViewModel.vouchers.collectAsState()
+    val loyaltyPoints = (userProfile?.get("loyaltyPoints") as? Number)?.toInt() ?: 0
+    val rankPoints = (userProfile?.get("totalLoyaltyPoints") as? Number)?.toInt() ?: loyaltyPoints
+    
     val images = products.mapNotNull { it.image_url?.takeIf { url -> url.isNotEmpty() } }.take(5)
     
     // Kiểm tra xem khách có đang có bàn chưa thanh toán không
@@ -308,6 +325,7 @@ fun HomeTab(
     }
     
     var showTableBlockedDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showNotificationSheet by remember { mutableStateOf(false) }
     
     if (showTableBlockedDialog) {
         androidx.compose.material3.AlertDialog(
@@ -323,13 +341,45 @@ fun HomeTab(
     }
     
     var showProductDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.example.restaurant.data.model.Product?>(null) }
-    var viewAllProducts by remember { mutableStateOf(false) }
-    
+    // "none" | "featured" | "bestseller"
+    var viewAllMode by remember { mutableStateOf("none") }
+
     var searchQuery by remember { mutableStateOf("") }
     val filteredProducts = remember(products, searchQuery) { products.filter { it.name.contains(searchQuery, ignoreCase = true) } }
 
+    // Tính lượt bán trong tháng hiện tại
+    val currentYearMonth = remember {
+        val cal = java.util.Calendar.getInstance()
+        val y = cal.get(java.util.Calendar.YEAR)
+        val m = cal.get(java.util.Calendar.MONTH) + 1
+        "%04d-%02d".format(y, m)
+    }
+    val monthlySalesCount = remember(orders, currentYearMonth) {
+        val cnt = mutableMapOf<Int, Int>()
+        orders.forEach { order ->
+            if (order.created_at.startsWith(currentYearMonth) && order.payment_status == "paid") {
+                order.items_detail?.forEach { item ->
+                    cnt[item.product_id] = (cnt[item.product_id] ?: 0) + item.quantity
+                }
+            }
+        }
+        cnt
+    }
+    // Ngưỡng bán chạy: >= 15 lượt trong tháng
+    val BESTSELLER_THRESHOLD = 15
+    val bestSellerProducts = remember(monthlySalesCount, products) {
+        products.filter { (monthlySalesCount[it.id] ?: 0) >= BESTSELLER_THRESHOLD }
+            .sortedByDescending { monthlySalesCount[it.id] ?: 0 }
+    }
+    // Preview (horizontal scroll): top 10 bán chạy nhất (kể cả dưới ngưỡng nếu đã có lượt bán)
+    val bestSellerPreview = remember(monthlySalesCount, products) {
+        products.filter { (monthlySalesCount[it.id] ?: 0) > 0 }
+            .sortedByDescending { monthlySalesCount[it.id] ?: 0 }
+            .take(10)
+    }
+
     LaunchedEffect(homeClickCount) {
-        viewAllProducts = false
+        viewAllMode = "none"
         searchQuery = ""
     }
 
@@ -339,14 +389,33 @@ fun HomeTab(
         }
     }
     
-    val pagerState = rememberPagerState(pageCount = { if(images.isEmpty()) 1 else images.size })
+    val activeVouchers = remember(vouchers, rankPoints) {
+        val currentTier = when {
+            rankPoints >= 5000 -> "diamond"
+            rankPoints >= 1000 -> "gold"
+            else -> "all"
+        }
+        val now = System.currentTimeMillis()
+        vouchers.filter { v ->
+            val meetsTier = when (v.required_tier) {
+                "diamond" -> currentTier == "diamond"
+                "gold" -> currentTier == "diamond" || currentTier == "gold"
+                else -> true
+            }
+            val isExpired = v.valid_until in 1..now
+            val isUsedUp = v.usage_limit > 0 && v.times_used >= v.usage_limit
+            meetsTier && !isExpired && !isUsedUp
+        }.take(3) // chỉ lấy max 3 banner
+    }
+    val combinedCount = activeVouchers.size + images.size
+    val pagerState = rememberPagerState(pageCount = { if(combinedCount == 0) 1 else combinedCount })
 
     // Auto-scroll logic
     LaunchedEffect(pagerState) {
-        if (images.size > 1) {
+        if (combinedCount > 1) {
             while (true) {
                 delay(3500)
-                val nextPage = (pagerState.currentPage + 1) % images.size
+                val nextPage = (pagerState.currentPage + 1) % combinedCount
                 pagerState.animateScrollToPage(nextPage)
             }
         }
@@ -361,11 +430,6 @@ fun HomeTab(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                            colors = listOf(Color.White, CreamBG)
-                        )
-                    )
                     .padding(horizontal = 16.dp, vertical = if (isCompact) 16.dp else 20.dp)
             ) {
                 Row(
@@ -392,28 +456,52 @@ fun HomeTab(
                         )
                     }
                     
-                    val avatarUrl = userProfile?.get("avatarUrl") as? String
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.White,
-                        border = BorderStroke(2.dp, WarmBrown.copy(alpha=0.3f)),
-                        shadowElevation = 8.dp,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        if (!avatarUrl.isNullOrBlank()) {
-                            coil.compose.AsyncImage(
-                                model = avatarUrl,
-                                contentDescription = "Avatar",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Icon(Icons.Default.AccountCircle, null, tint = Color.LightGray, modifier = Modifier.fillMaxSize().padding(4.dp))
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Notification Bell
+                        val unreadCount by notificationViewModel.unreadCount.collectAsState()
+                        Box(modifier = Modifier.padding(end = 16.dp)) {
+                            IconButton(onClick = { showNotificationSheet = true }) {
+                                Icon(Icons.Default.Notifications, contentDescription = "Thông báo", tint = WarmBrown, modifier = Modifier.size(28.dp))
+                            }
+                            if (unreadCount > 0) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Red,
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp).size(16.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(if (unreadCount > 9) "9+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        val avatarUrl = userProfile?.get("avatarUrl") as? String
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White,
+                            border = BorderStroke(2.dp, WarmBrown.copy(alpha=0.3f)),
+                            shadowElevation = 8.dp,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            if (!avatarUrl.isNullOrBlank()) {
+                                coil.compose.AsyncImage(
+                                    model = avatarUrl,
+                                    contentDescription = "Avatar",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Icon(Icons.Default.AccountCircle, null, tint = Color.LightGray, modifier = Modifier.fillMaxSize().padding(4.dp))
+                            }
                         }
                     }
                 }
             }
         }
+
+
 
         // Search Bar (Đưa lên trên chuẩn Insight App)
         item {
@@ -446,7 +534,7 @@ fun HomeTab(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        if (searchQuery.isBlank() && !viewAllProducts) {
+        if (searchQuery.isBlank() && viewAllMode == "none") {
             // Promo Banner Carousel (Thiết kế tràn viền hiện đại)
             item {
                 val bannerRatio = if (isCompact) 2.8f else 2.2f
@@ -457,63 +545,124 @@ fun HomeTab(
                         .padding(horizontal = 14.dp)
                         .clip(RoundedCornerShape(18.dp))
                 ) {
-                    if (images.isNotEmpty()) {
+                    if (combinedCount > 0) {
                         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-                            AsyncImage(
-                                model = images[page],
-                                contentDescription = "Banner",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            if (page < activeVouchers.size) {
+                                val v = activeVouchers[page]
+                                // Dynamic background color based on tier
+                                val bgColor = when(v.required_tier) {
+                                    "diamond" -> Color(0xFF283593)
+                                    "gold" -> Color(0xFFF57F17)
+                                    else -> Color(0xFFD32F2F)
+                                }
+                                Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
+                                    // Add some nice decorative circles
+                                    Box(modifier = Modifier.offset(x = (-30).dp, y = (-50).dp).size(150.dp).background(Color.White.copy(alpha=0.1f), CircleShape))
+                                    Box(modifier = Modifier.align(Alignment.BottomEnd).offset(x = 40.dp, y = 30.dp).size(120.dp).background(Color.White.copy(alpha=0.1f), CircleShape))
+                                    
+                                    Row(
+                                        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = Color.White.copy(alpha = 0.2f)
+                                            ) {
+                                                val tierBadge = when(v.required_tier) {
+                                                    "diamond" -> "👑 KIM CƯƠNG"
+                                                    "gold" -> "⭐ HẠNG VÀNG"
+                                                    else -> "🎁 HOT VOUCHER"
+                                                }
+                                                Text(
+                                                    tierBadge,
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    fontSize = 10.sp,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                            Spacer(Modifier.height(6.dp))
+                                            val discText = if (v.is_percent) "Giảm ${v.discount_amount.toInt()}%" else "Giảm ${v.discount_amount.toLong().toVndFormat()}đ"
+                                            Text(
+                                                discText,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Black,
+                                                fontSize = 22.sp
+                                            )
+                                            Spacer(Modifier.height(4.dp))
+                                            Text(
+                                                "Mã: ${v.code}",
+                                                color = Color.White.copy(alpha=0.9f),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                        Icon(Icons.Default.CardGiftcard, null, modifier = Modifier.size(60.dp), tint = Color.White.copy(alpha=0.8f))
+                                    }
+                                }
+                            } else {
+                                val imgIdx = page - activeVouchers.size
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    AsyncImage(
+                                        model = images[imgIdx],
+                                        contentDescription = "Banner",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    // Gradient overlay
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                                    colors = listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = 0.75f))
+                                                )
+                                            )
+                                    )
+                                    // Promo text
+                                    Column(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomStart)
+                                            .padding(14.dp)
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = Color(0xFFFF5252).copy(alpha = 0.9f)
+                                        ) {
+                                            Text(
+                                                "Khám Phá Menu Mới",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 10.sp,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(
+                                            "Món ăn hấp dẫn đang chờ bạn!",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                }
+                            }
                         }
                     } else {
                         Box(modifier = Modifier.fillMaxSize().background(Color(0xFFE0E0E0)))
                     }
-                    // Gradient overlay
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = 0.75f))
-                                )
-                            )
-                    )
-                    // Promo text
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(14.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFFFF5252).copy(alpha = 0.9f)
-                        ) {
-                            Text(
-                                "Mã Ưu Đãi: BIGSALE🔥",
-                                color = Color.White,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 10.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "Giảm 20% cho đơn hàng đầu tiên!",
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 14.sp
-                        )
-                    }
+
                     // Dot indicators
-                    if (images.size > 1) {
+                    if (combinedCount > 1) {
                         Row(
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(12.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            repeat(images.size) { i ->
+                            repeat(combinedCount) { i ->
                                 val isSelected = pagerState.currentPage == i
                                 Box(
                                     modifier = Modifier
@@ -535,7 +684,7 @@ fun HomeTab(
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     ActionCircleBtn(
-                        title = "Đặt bàn", 
+                        title = "Tại bàn", 
                         icon = Icons.Default.TableRestaurant, 
                         gradientColors = listOf(Color(0xFFFFF3E0), Color(0xFFFFE0B2)),
                         iconTint = Color(0xFFE65100),
@@ -543,6 +692,13 @@ fun HomeTab(
                             if (hasActiveTable) showTableBlockedDialog = true
                             else onNavigateToTable()
                         }
+                    )
+                    ActionCircleBtn(
+                        title = "Đặt chỗ", 
+                        icon = Icons.Default.EventSeat, 
+                        gradientColors = listOf(Color(0xFFF3E5F5), Color(0xFFE1BEE7)),
+                        iconTint = Color(0xFF6A1B9A),
+                        onClick = onNavigateToReservation
                     )
                     ActionCircleBtn(
                         title = "Bàn của tôi", 
@@ -563,7 +719,7 @@ fun HomeTab(
             }
         }
 
-        if (searchQuery.isBlank()) {
+        if (searchQuery.isBlank() && viewAllMode == "none") {
             // Featured Items Label
             item {
                 Row(
@@ -573,13 +729,13 @@ fun HomeTab(
                 ) {
                     Text("Top Món Nổi Bật ✨", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
                     TextButton(
-                        onClick = { viewAllProducts = true },
+                        onClick = { viewAllMode = "featured" },
                         contentPadding = PaddingValues(0.dp)
                     ) {
                         Text(
-                            "Xem thêm", 
-                            fontSize = 14.sp, 
-                            color = WarmBrown, 
+                            "Xem thêm",
+                            fontSize = 14.sp,
+                            color = WarmBrown,
                             fontWeight = FontWeight.Bold
                         )
                         Icon(Icons.Default.ArrowForwardIos, null, modifier = Modifier.size(12.dp), tint = WarmBrown)
@@ -625,18 +781,20 @@ fun HomeTab(
                                                 Icon(Icons.Default.Fastfood, null, tint = WarmBrown.copy(alpha=0.5f), modifier = Modifier.size(40.dp))
                                             }
                                         }
-                                        Surface(
-                                            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = Color.White.copy(alpha = 0.9f)
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        if (product.review_count > 0) {
+                                            Surface(
+                                                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = Color.White.copy(alpha = 0.9f)
                                             ) {
-                                                Icon(Icons.Default.Star, null, tint = Color(0xFFFFB300), modifier = Modifier.size(12.dp))
-                                                Spacer(Modifier.width(3.dp))
-                                                Text("4.8", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Star, null, tint = Color(0xFFFFB300), modifier = Modifier.size(12.dp))
+                                                    Spacer(Modifier.width(3.dp))
+                                                    Text(String.format("%.1f", product.average_rating), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                }
                                             }
                                         }
                                         
@@ -683,8 +841,149 @@ fun HomeTab(
                     }
                 }
             }
+
+            // Top Món Bán Chạy 🔥
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Top Món Bán Chạy 🔥", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
+                    TextButton(
+                        onClick = { viewAllMode = "bestseller" },
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text("Xem thêm", fontSize = 14.sp, color = WarmBrown, fontWeight = FontWeight.Bold)
+                        Icon(Icons.Default.ArrowForwardIos, null, modifier = Modifier.size(12.dp), tint = WarmBrown)
+                    }
+                }
+            }
+
+            item {
+                if (bestSellerPreview.isNotEmpty()) {
+                    val cfg3 = LocalConfiguration.current
+                    val cardWidth = (cfg3.screenWidthDp * 0.42f).dp.coerceIn(140.dp, 200.dp)
+                    val imgHeight = (cardWidth.value * 0.72f).dp.coerceIn(100.dp, 150.dp)
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        items(bestSellerPreview, key = { it.id }) { product ->
+                            Surface(
+                                modifier = Modifier
+                                    .width(cardWidth)
+                                    .clickable { showProductDialog = product },
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color.White,
+                                shadowElevation = 10.dp
+                            ) {
+                                Column(modifier = Modifier.padding(bottom = 10.dp)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(imgHeight)
+                                    ) {
+                                        if (!product.image_url.isNullOrEmpty()) {
+                                            AsyncImage(
+                                                model = product.image_url,
+                                                contentDescription = product.name,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                                            )
+                                        } else {
+                                            Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF0EDE8)), contentAlignment = Alignment.Center) {
+                                                Icon(Icons.Default.Fastfood, null, tint = WarmBrown.copy(alpha=0.5f), modifier = Modifier.size(40.dp))
+                                            }
+                                        }
+                                        Surface(
+                                            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = Color.White.copy(alpha = 0.9f)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                            ) {
+                                                Icon(Icons.Default.LocalFireDepartment, null, tint = Color(0xFFFF5722), modifier = Modifier.size(12.dp))
+                                                Spacer(Modifier.width(3.dp))
+                                                Text("Hot", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFFFF5722))
+                                            }
+                                        }
+                                        val isLiked = likedProducts.contains(product.id)
+                                        Surface(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .offset(x = (-8).dp, y = 8.dp)
+                                                .size(30.dp),
+                                            shape = CircleShape,
+                                            color = Color.White.copy(alpha=0.9f),
+                                            shadowElevation = 2.dp
+                                        ) {
+                                            IconButton(onClick = { authViewModel.toggleFavoriteProduct(token, product.id) }) {
+                                                Icon(if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, tint = if (isLiked) Color.Red else Color.LightGray, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                    }
+                                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                product.name,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                maxLines = 1,
+                                                color = Color(0xFF1A1A2E),
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                            if (product.review_count > 0) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp)) {
+                                                    Icon(androidx.compose.material.icons.Icons.Default.Star, null, tint = Color(0xFFFFB300), modifier = Modifier.size(12.dp))
+                                                    Spacer(Modifier.width(2.dp))
+                                                    Text(String.format("%.1f", product.average_rating), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                                                }
+                                            }
+                                        }
+                                        Spacer(Modifier.height(4.dp))
+
+                                        Text(
+                                            "${product.price.toLong()} ₫",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = WarmBrown
+                                        )
+                                        val stockStatus by restaurantViewModel.productStockStatusMap.collectAsState()
+                                        if (stockStatus[product.id] == StockStatus.OUT_OF_STOCK) {
+                                            Spacer(Modifier.height(4.dp))
+                                            Text("Hết hàng", fontSize=10.sp, color=Color.Red, fontWeight=FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+                        Text("Chưa có dữ liệu bán hàng", color = Color.Gray, fontSize = 14.sp)
+                    }
+                }
+            }
         } else {
-            // Kết quả tìm kiếm / Tất cả món ăn dạng List cao cấp
+            // Grid: featured / bestseller / search results
+            val gridProducts = when {
+                viewAllMode == "featured" -> products.filter { it.is_featured }
+                viewAllMode == "bestseller" -> bestSellerProducts
+                else -> filteredProducts
+            }
+            val gridTitle = when {
+                viewAllMode == "featured" -> "✨ Món Nổi Bật"
+                viewAllMode == "bestseller" -> "🔥 Bán Chạy Tháng Này (≥$BESTSELLER_THRESHOLD lượt)"
+                else -> "Kết quả tìm kiếm"
+            }
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp),
@@ -692,19 +991,19 @@ fun HomeTab(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (viewAllProducts && searchQuery.isBlank()) {
+                        if (viewAllMode != "none" && searchQuery.isBlank()) {
                             Surface(
                                 shape = CircleShape,
                                 color = Color.White,
                                 shadowElevation = 2.dp,
-                                modifier = Modifier.size(36.dp).clickable { viewAllProducts = false }.padding(end = 12.dp)
+                                modifier = Modifier.size(36.dp).clickable { viewAllMode = "none" }.padding(end = 12.dp)
                             ) {
                                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = WarmBrown, modifier = Modifier.padding(6.dp))
                             }
                         }
                         Text(
-                            if (searchQuery.isBlank()) "Tất cả Món ngon" else "Kết quả tìm kiếm",
-                            fontSize = 22.sp,
+                            gridTitle,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFF1A1A2E)
                         )
@@ -712,66 +1011,151 @@ fun HomeTab(
                 }
             }
             
-            if (filteredProducts.isEmpty()) {
+            if (gridProducts.isEmpty()) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.SearchOff, null, tint = Color.LightGray, modifier = Modifier.size(64.dp))
+                            Icon(
+                                if (viewAllMode == "bestseller") Icons.Default.LocalFireDepartment else Icons.Default.SearchOff,
+                                null, tint = Color.LightGray, modifier = Modifier.size(64.dp)
+                            )
                             Spacer(Modifier.height(16.dp))
-                            Text("Không tìm thấy món ăn nào.", color = Color.Gray, fontSize = 16.sp)
+                            Text(
+                                if (viewAllMode == "bestseller") "Chưa có món nào đạt $BESTSELLER_THRESHOLD lượt bán trong tháng này."
+                                else if (viewAllMode == "featured") "Chưa có món nào được đánh dấu nổi bật."
+                                else "Không tìm thấy món ăn nào.",
+                                color = Color.Gray, fontSize = 14.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 24.dp)
+                            )
                         }
                     }
                 }
             } else {
-                items(filteredProducts, key = { it.id }) { product ->
-                    Surface(
+                items(gridProducts.chunked(2)) { rowProducts ->
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 8.dp)
-                            .clickable { showProductDialog = product },
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White,
-                        shadowElevation = 4.dp
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (!product.image_url.isNullOrEmpty()) {
-                                AsyncImage(
-                                    model = product.image_url,
-                                    contentDescription = product.name,
-                                    modifier = Modifier.size(70.dp).clip(RoundedCornerShape(14.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Box(modifier = Modifier.size(70.dp).background(Color(0xFFF0EDE8), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Fastfood, null, tint = WarmBrown.copy(alpha=0.5f), modifier = Modifier.size(26.dp))
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(product.name, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = Color(0xFF1A1A2E))
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text("⭐ 4.8  |  🔥 Best Seller", fontSize = 11.sp, color = Color.Gray)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("${product.price.toLong()} ₫", color = WarmBrown, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-
-                                // Dùng SSOT cached map — O(1), không recompute trong render
-                                val stockStatusMap by restaurantViewModel.productStockStatusMap.collectAsState()
-                                if (stockStatusMap[product.id] == StockStatus.OUT_OF_STOCK) {
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Surface(shape = RoundedCornerShape(6.dp), color = Color.Red.copy(alpha=0.1f)) {
-                                        Text("Hết hàng", fontSize=11.sp, color=Color.Red, fontWeight=FontWeight.Bold, modifier=Modifier.padding(horizontal=8.dp, vertical=4.dp))
+                        rowProducts.forEach { product ->
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { showProductDialog = product },
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color.White,
+                                shadowElevation = 6.dp
+                            ) {
+                                Column(modifier = Modifier.padding(bottom = 10.dp)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .aspectRatio(1.2f)
+                                    ) {
+                                        if (!product.image_url.isNullOrEmpty()) {
+                                            AsyncImage(
+                                                model = product.image_url,
+                                                contentDescription = product.name,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                                            )
+                                        } else {
+                                            Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF0EDE8)), contentAlignment = Alignment.Center) {
+                                                Icon(Icons.Default.Fastfood, null, tint = WarmBrown.copy(alpha=0.5f), modifier = Modifier.size(32.dp))
+                                            }
+                                        }
+                                        val isLikedG = likedProducts.contains(product.id)
+                                        Surface(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .offset(x = (-8).dp, y = 8.dp)
+                                                .size(30.dp),
+                                            shape = CircleShape,
+                                            color = Color.White.copy(alpha=0.9f),
+                                            shadowElevation = 2.dp
+                                        ) {
+                                            IconButton(onClick = { authViewModel.toggleFavoriteProduct(token, product.id) }) {
+                                                Icon(if (isLikedG) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, tint = if (isLikedG) Color.Red else Color.LightGray, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                    }
+                                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                        Text(product.name, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, color = Color(0xFF1A1A2E))
+                                        Spacer(Modifier.height(4.dp))
+                                        Text("${product.price.toLong()} ₫", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = WarmBrown)
+                                        // Hiện số lượt bán trong tháng nếu đang ở bestseller mode
+                                        if (viewAllMode == "bestseller") {
+                                            val sold = monthlySalesCount[product.id] ?: 0
+                                            Spacer(Modifier.height(4.dp))
+                                            Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFFFF5722).copy(alpha = 0.1f)) {
+                                                Text(
+                                                    "🔥 $sold lượt/tháng",
+                                                    fontSize = 10.sp, color = Color(0xFFFF5722),
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                        }
+                                        val stockStatusMap by restaurantViewModel.productStockStatusMap.collectAsState()
+                                        if (stockStatusMap[product.id] == StockStatus.OUT_OF_STOCK) {
+                                            Spacer(Modifier.height(4.dp))
+                                            Text("Hết hàng", fontSize=10.sp, color=Color.Red, fontWeight=FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }
-                            val isLiked = likedProducts.contains(product.id)
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                IconButton(onClick = { authViewModel.toggleFavoriteProduct(token, product.id) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, tint = if (isLiked) Color.Red else Color.LightGray, modifier = Modifier.size(28.dp))
+                        }
+                        if (rowProducts.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+    
+    if (showNotificationSheet) {
+        val notifications by notificationViewModel.notifications.collectAsState()
+        ModalBottomSheet(
+            onDismissRequest = { showNotificationSheet = false },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp).heightIn(max = 500.dp)) {
+                Text("Thông báo của bạn", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(Modifier.height(16.dp))
+                if (notifications.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        Text("Chưa có thông báo nào.", color = Color.Gray)
+                    }
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(notifications, key = { it.id }) { notif ->
+                            val bgColor = if (notif.is_read) Color(0xFFF5F5F5) else Color(0xFFFFF3E0)
+                            val iconColor = when(notif.type) {
+                                "success" -> StatusGreen
+                                "warning" -> StatusRed
+                                else -> Color(0xFF2196F3)
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = bgColor,
+                                modifier = Modifier.fillMaxWidth().clickable { 
+                                    if (!notif.is_read) notificationViewModel.markAsRead(notif.id) 
                                 }
-                                Icon(Icons.Default.AddCircle, null, tint = WarmBrown, modifier = Modifier.size(32.dp))
+                            ) {
+                                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+                                    Icon(Icons.Default.Notifications, null, tint = iconColor, modifier = Modifier.size(24.dp))
+                                    Spacer(Modifier.width(12.dp))
+                                    Column {
+                                        Text(notif.title, fontWeight = if (notif.is_read) FontWeight.Normal else FontWeight.Bold, fontSize = 15.sp)
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(notif.body, color = Color.DarkGray, fontSize = 13.sp)
+                                    }
+                                }
                             }
                         }
                     }
@@ -813,6 +1197,7 @@ fun NotificationsTab(
     token: String,
     restaurantViewModel: RestaurantViewModel,
     authViewModel: AuthViewModel,
+    voucherViewModel: VoucherViewModel,
     onOrderMore: (Int, String) -> Unit,
     onRequestPayment: (Int, Int, Double) -> Unit,
     snackbarHostState: SnackbarHostState
@@ -1110,6 +1495,7 @@ fun NotificationsTab(
             order = invoiceOrder!!,
             products = products,
             authViewModel = authViewModel,
+            voucherViewModel = voucherViewModel,
             onDismiss = { invoiceOrder = null },
             onConfirmPayment = { orderId, pointsUsed, discountAmount ->
                 invoiceOrder = null
@@ -1125,6 +1511,7 @@ fun InvoiceBottomSheet(
     order: com.example.restaurant.data.model.Order,
     products: List<com.example.restaurant.data.model.Product>,
     authViewModel: AuthViewModel,
+    voucherViewModel: VoucherViewModel,
     onDismiss: () -> Unit,
     onConfirmPayment: (Int, Int, Double) -> Unit
 ) {
@@ -1132,11 +1519,32 @@ fun InvoiceBottomSheet(
     
     val userProfile by authViewModel.userProfile.collectAsState()
     val loyaltyPoints = (userProfile?.get("loyaltyPoints") as? Number)?.toInt() ?: 0
+    val rankPoints = (userProfile?.get("totalLoyaltyPoints") as? Number)?.toInt() ?: loyaltyPoints
     var usePoints by remember { mutableStateOf(false) }
     
+    var promoCodeInput by remember { mutableStateOf("") }
+    var appliedVoucher by remember { mutableStateOf<Voucher?>(null) }
+    var promoMessage by remember { mutableStateOf("") }
+    var promoIsError by remember { mutableStateOf(false) }
+    var showVoucherWallet by remember { mutableStateOf(false) }
+    
+    val vouchers by voucherViewModel.vouchers.collectAsState()
+
     val pointsToUse = if (usePoints) minOf(loyaltyPoints, order.total_amount.toInt()) else 0
-    val discountAmount = pointsToUse.toDouble()
-    val finalTotal = order.total_amount - discountAmount
+    val pointsDiscountAmount = pointsToUse.toDouble()
+    
+    val remainingAfterPoints = maxOf(0.0, order.total_amount - pointsDiscountAmount)
+    
+    val voucherDiscountAmount = appliedVoucher?.let { v ->
+        var disc = if (v.is_percent) remainingAfterPoints * (v.discount_amount / 100.0) else v.discount_amount
+        if (v.max_discount != null && v.max_discount > 0.0) {
+            disc = minOf(disc, v.max_discount)
+        }
+        disc
+    } ?: 0.0
+
+    val totalDiscount = pointsDiscountAmount + voucherDiscountAmount
+    val finalTotal = maxOf(0.0, order.total_amount - totalDiscount)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1276,8 +1684,119 @@ fun InvoiceBottomSheet(
                         if (usePoints) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Giảm giá (Điểm)", fontSize = 14.sp, color = Color(0xFFE65100))
-                                Text("-${discountAmount.toLong().toVndFormat()} ₫", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE65100))
+                                Text("-${pointsDiscountAmount.toLong().toVndFormat()} ₫", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE65100))
                             }
+                        }
+                    }
+
+                    // --- Promo Code Input Section ---
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = WarmBrown.copy(alpha = 0.2f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = promoCodeInput,
+                            onValueChange = { promoCodeInput = it.uppercase() },
+                            placeholder = { Text("Nhập mã khuyến mãi", fontSize = 13.sp) },
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = WarmBrown,
+                                unfocusedBorderColor = Color.LightGray
+                            )
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        
+                        // Icon Button để mở Kho Voucher
+                        IconButton(
+                            onClick = { showVoucherWallet = true },
+                            modifier = Modifier.size(50.dp).background(WarmBrown.copy(alpha=0.1f), RoundedCornerShape(12.dp))
+                        ) {
+                            Icon(Icons.Default.CardGiftcard, contentDescription = "Kho Voucher", tint = WarmBrown)
+                        }
+                        
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                if (promoCodeInput.isBlank()) {
+                                    promoMessage = "Vui lòng nhập mã."
+                                    promoIsError = true
+                                    appliedVoucher = null
+                                    return@Button
+                                }
+                                val v = vouchers.find { it.code.equals(promoCodeInput, ignoreCase = true) }
+                                if (v == null) {
+                                    promoMessage = "Mã không hợp lệ."
+                                    promoIsError = true
+                                    appliedVoucher = null
+                                    return@Button
+                                }
+                                val now = System.currentTimeMillis()
+                                if (v.valid_until > 0 && v.valid_until < now) {
+                                    promoMessage = "Mã đã hết hạn."
+                                    promoIsError = true
+                                    appliedVoucher = null
+                                    return@Button
+                                }
+                                if (v.usage_limit > 0 && v.times_used >= v.usage_limit) {
+                                    promoMessage = "Mã đã hết lượt sử dụng."
+                                    promoIsError = true
+                                    appliedVoucher = null
+                                    return@Button
+                                }
+                                if (order.total_amount < v.min_order_value) {
+                                    promoMessage = "Đơn chưa đạt tối thiểu ${v.min_order_value.toLong().toVndFormat()}đ."
+                                    promoIsError = true
+                                    appliedVoucher = null
+                                    return@Button
+                                }
+                                
+                                val currentTier = when {
+                                    rankPoints >= 5000 -> "diamond"
+                                    rankPoints >= 1000 -> "gold"
+                                    else -> "all"
+                                }
+                                val meetsTier = when (v.required_tier) {
+                                    "diamond" -> currentTier == "diamond"
+                                    "gold" -> currentTier == "diamond" || currentTier == "gold"
+                                    else -> true
+                                }
+                                if (!meetsTier) {
+                                    promoMessage = "Mã không dành cho hạng thành viên của bạn."
+                                    promoIsError = true
+                                    appliedVoucher = null
+                                    return@Button
+                                }
+                                
+                                appliedVoucher = v
+                                promoCodeInput = v.code
+                                promoMessage = "Đã áp dụng mã thành công!"
+                                promoIsError = false
+                            },
+                            modifier = Modifier.height(50.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = WarmBrown)
+                        ) {
+                            Text("Áp dụng", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    if (promoMessage.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = promoMessage,
+                            color = if (promoIsError) StatusRed else StatusGreen,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    if (appliedVoucher != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Giảm giá (Voucher)", fontSize = 14.sp, color = StatusGreen)
+                            Text("-${voucherDiscountAmount.toLong().toVndFormat()} ₫", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = StatusGreen)
                         }
                     }
 
@@ -1324,7 +1843,12 @@ fun InvoiceBottomSheet(
                 }
                 // Nút xác nhận thanh toán
                 Button(
-                    onClick = { onConfirmPayment(order.id, pointsToUse, discountAmount) },
+                    onClick = { 
+                        appliedVoucher?.let {
+                            voucherViewModel.incrementVoucherUsage(it.id)
+                        }
+                        onConfirmPayment(order.id, pointsToUse, totalDiscount) 
+                    },
                     modifier = Modifier.weight(2f).height(54.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -1337,6 +1861,77 @@ fun InvoiceBottomSheet(
                 }
             }
         }
+    }
+    
+    if (showVoucherWallet) {
+        AlertDialog(
+            onDismissRequest = { showVoucherWallet = false },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(24.dp),
+            title = { Text("Kho Voucher của bạn", fontWeight = FontWeight.ExtraBold) },
+            text = {
+                val currentTier = when {
+                    rankPoints >= 5000 -> "diamond"
+                    rankPoints >= 1000 -> "gold"
+                    else -> "all"
+                }
+                val now = System.currentTimeMillis()
+                val eligibleVouchers = vouchers.filter { v ->
+                    val meetsTier = when (v.required_tier) {
+                        "diamond" -> currentTier == "diamond"
+                        "gold" -> currentTier == "diamond" || currentTier == "gold"
+                        else -> true
+                    }
+                    val isExpired = v.valid_until in 1..now
+                    val isUsedUp = v.usage_limit > 0 && v.times_used >= v.usage_limit
+                    meetsTier && !isExpired && !isUsedUp
+                }
+
+                if (eligibleVouchers.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        Text("Không có mã khuyến mãi khả dụng", color = Color.Gray)
+                    }
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(eligibleVouchers, key = { it.id }) { v ->
+                            val meetsMinOrder = order.total_amount >= v.min_order_value
+                            val alpha = if (meetsMinOrder) 1f else 0.5f
+                            
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = WarmBrown.copy(alpha=0.1f * alpha),
+                                modifier = Modifier.fillMaxWidth().clickable(enabled = meetsMinOrder) {
+                                    promoCodeInput = v.code
+                                    appliedVoucher = v
+                                    promoMessage = "Đã áp dụng mã thành công!"
+                                    promoIsError = false
+                                    showVoucherWallet = false
+                                }
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(v.code, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = WarmBrown.copy(alpha=alpha))
+                                    Spacer(Modifier.height(4.dp))
+                                    val discText = if (v.is_percent) "Giảm ${v.discount_amount.toInt()}%" else "Giảm ${v.discount_amount.toLong().toVndFormat()}đ"
+                                    val maxText = if (v.is_percent && v.max_discount != null && v.max_discount > 0.0) " (Tối đa ${v.max_discount.toLong().toVndFormat()}đ)" else ""
+                                    Text(discText + maxText, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1A1A2E).copy(alpha=alpha))
+                                    Text("Đơn tối thiểu: ${v.min_order_value.toLong().toVndFormat()}đ", fontSize = 12.sp, color = Color.Gray.copy(alpha=alpha))
+                                    if (!meetsMinOrder) {
+                                        Spacer(Modifier.height(4.dp))
+                                        val diff = v.min_order_value - order.total_amount
+                                        Text("Cần mua thêm ${diff.toLong().toVndFormat()}đ", fontSize = 12.sp, color = StatusRed)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showVoucherWallet = false }) {
+                    Text("Đóng", color = Color.Gray)
+                }
+            }
+        )
     }
 }
 
@@ -1435,7 +2030,7 @@ fun EditOrderBottomSheet(
 }
 
 @Composable
-fun SettingsTab(token: String, authViewModel: AuthViewModel, onNavigateToOrderHistory: () -> Unit, onLogout: () -> Unit) {
+fun SettingsTab(token: String, authViewModel: AuthViewModel, onNavigateToOrderHistory: () -> Unit, onNavigateToReservationHistory: () -> Unit, onLogout: () -> Unit) {
     LaunchedEffect(Unit) {
         authViewModel.loadUserProfile(token)
     }
@@ -1532,34 +2127,35 @@ fun SettingsTab(token: String, authViewModel: AuthViewModel, onNavigateToOrderHi
 
         // Loyalty Card & Rank
         val loyaltyPoints = (userProfile?.get("loyaltyPoints") as? Number)?.toInt() ?: 0
+        val rankPoints = (userProfile?.get("totalLoyaltyPoints") as? Number)?.toInt() ?: loyaltyPoints
         
         val rankName = when {
-            loyaltyPoints >= 5000 -> "Thành Viên Kim Cương"
-            loyaltyPoints >= 1000 -> "Thành Viên Vàng"
+            rankPoints >= 5000 -> "Thành Viên Kim Cương"
+            rankPoints >= 1000 -> "Thành Viên Vàng"
             else -> "Thành Viên Khởi Đầu"
         }
         val rankColor = when {
-            loyaltyPoints >= 5000 -> Color(0xFF3F51B5)
-            loyaltyPoints >= 1000 -> Color(0xFFFF8F00)
+            rankPoints >= 5000 -> Color(0xFF3F51B5)
+            rankPoints >= 1000 -> Color(0xFFFF8F00)
             else -> Color(0xFF8D6E63)
         }
         val rankBgColor = when {
-            loyaltyPoints >= 5000 -> Color(0xFFE8EAF6)
-            loyaltyPoints >= 1000 -> Color(0xFFFFF8E1)
+            rankPoints >= 5000 -> Color(0xFFE8EAF6)
+            rankPoints >= 1000 -> Color(0xFFFFF8E1)
             else -> Color(0xFFEFEBE9)
         }
         val rankIcon = when {
-            loyaltyPoints >= 5000 -> Icons.Default.Star
-            loyaltyPoints >= 1000 -> Icons.Default.Stars
+            rankPoints >= 5000 -> Icons.Default.Star
+            rankPoints >= 1000 -> Icons.Default.Stars
             else -> Icons.Default.Face
         }
         
         val nextRankPoints = when {
-            loyaltyPoints >= 5000 -> 0
-            loyaltyPoints >= 1000 -> 5000
+            rankPoints >= 5000 -> 0
+            rankPoints >= 1000 -> 5000
             else -> 1000
         }
-        val progress = if (nextRankPoints > 0) (loyaltyPoints.toFloat() / nextRankPoints).coerceIn(0f, 1f) else 1f
+        val progress = if (nextRankPoints > 0) (rankPoints.toFloat() / nextRankPoints).coerceIn(0f, 1f) else 1f
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -1766,6 +2362,19 @@ fun SettingsTab(token: String, authViewModel: AuthViewModel, onNavigateToOrderHi
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
+            onClick = onNavigateToReservationHistory,
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = WarmBrown.copy(alpha=0.1f)),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+        ) {
+            Icon(Icons.Default.EventSeat, null, tint = WarmBrown, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Lịch sử đặt bàn", color = WarmBrown, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
             onClick = onLogout,
             modifier = Modifier.fillMaxWidth().height(54.dp),
             shape = RoundedCornerShape(16.dp),
@@ -1787,7 +2396,7 @@ fun AboutTab(mapWebView: WebView?) {
             .padding(horizontal = 20.dp)
             .padding(top = 24.dp, bottom = 100.dp)
     ) {
-        Text("Về chúng tôi", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
+        Text("About Me", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
         Spacer(modifier = Modifier.height(24.dp))
         
         Surface(

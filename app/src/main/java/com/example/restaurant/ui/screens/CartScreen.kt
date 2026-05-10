@@ -1,6 +1,7 @@
 package com.example.restaurant.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -109,22 +110,42 @@ fun CartScreen(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Quantity badge
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = WarmBrown.copy(alpha = 0.12f),
-                                    modifier = Modifier.size(36.dp)
+                                // Edit quantity controls
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.padding(end = 12.dp)
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            "x$quantity",
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 13.sp,
-                                            color = WarmBrown
-                                        )
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFFF5F5F5),
+                                        modifier = Modifier.size(28.dp).clickable { viewModel.removeFromCart(product) }
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text("-", fontWeight = FontWeight.Bold, color = Color.Gray, fontSize = 16.sp)
+                                        }
+                                    }
+                                    
+                                    Text(
+                                        "$quantity",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 14.sp,
+                                        color = WarmBrown,
+                                        modifier = Modifier.defaultMinSize(minWidth = 16.dp),
+                                        textAlign = TextAlign.Center
+                                    )
+                                    
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = WarmBrown.copy(alpha = 0.1f),
+                                        modifier = Modifier.size(28.dp).clickable { viewModel.addToCart(product) }
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text("+", fontWeight = FontWeight.Bold, color = WarmBrown, fontSize = 16.sp)
+                                        }
                                     }
                                 }
-                                Spacer(Modifier.width(12.dp))
+
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(product.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF1A1A2E))
                                     Text(
@@ -133,12 +154,24 @@ fun CartScreen(
                                         color = Color.Gray
                                     )
                                 }
-                                Text(
-                                    "${(product.price * quantity).toVndFormat()} d",
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = WarmBrown,
-                                    fontSize = 14.sp
-                                )
+                                
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        "${(product.price * quantity).toVndFormat()} d",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = WarmBrown,
+                                        fontSize = 14.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Xóa",
+                                        tint = Color.Red.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(20.dp).clickable { 
+                                            viewModel.deleteItemFromCart(product)
+                                        }
+                                    )
+                                }
                             }
                             HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
                         }

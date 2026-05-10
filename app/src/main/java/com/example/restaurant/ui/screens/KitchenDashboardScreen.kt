@@ -1,6 +1,9 @@
 package com.example.restaurant.ui.screens
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -35,6 +38,8 @@ import com.example.restaurant.ui.theme.StatusYellow
 import com.example.restaurant.ui.theme.WarmBrown
 import com.example.restaurant.ui.theme.premiumBackground
 import com.example.restaurant.ui.viewmodel.RestaurantViewModel
+import com.example.restaurant.ui.viewmodel.IngredientScanViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.restaurant.utils.toVndFormat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -57,152 +62,181 @@ fun KitchenDashboardScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize().premiumBackground(),
-        containerColor = Color.Transparent,
-        bottomBar = {
-            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
-                    color = Color.White,
-                    shadowElevation = 16.dp
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val navItems = listOf(
-                            Triple("Đơn hàng", Icons.AutoMirrored.Filled.List, 0),
-                            Triple("Nguyên liệu", Icons.Default.Build, 1)
-                        )
-                        navItems.forEach { (label, icon, index) ->
-                            val isSelected = selectedTab == index
-                            val scale by animateFloatAsState(
-                                targetValue = if (isSelected) 1f else 0.85f,
-                                animationSpec = spring(dampingRatio = 0.5f), label = "scale"
-                            )
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.weight(1f).clickable { selectedTab = index }.padding(vertical = 4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .graphicsLayer { scaleX = scale; scaleY = scale }
-                                        .background(if (isSelected) WarmBrown.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(14.dp))
-                                        .padding(horizontal = 22.dp, vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
+    // IngredientScan state
+    val ingredientScanViewModel: IngredientScanViewModel = viewModel()
+    val ingredientScanState by ingredientScanViewModel.scanState.collectAsState()
+    var showIngredientScanResult by remember { mutableStateOf(false) }
+
+    if (showIngredientScanResult) {
+        IngredientScanResultScreen(
+            scanViewModel = ingredientScanViewModel,
+            restaurantViewModel = viewModel,
+            onBack = { showIngredientScanResult = false; viewModel.fetchInventory() },
+            onScanAgain = { uri ->
+                ingredientScanViewModel.scanIngredientImage(uri, viewModel.ingredients.value, context)
+            }
+        )
+        return
+    }
+
+    Box(modifier = Modifier.fillMaxSize().premiumBackground()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+        ) { _ ->
+            Column(modifier = Modifier.fillMaxSize()) {
+                val orders by viewModel.orders.collectAsState()
+
+                when (selectedTab) {
+                    0 -> {
+                        val pendingCount = orders.count { it.order_status == "pending" }
+                        val processingCount = orders.count { it.order_status == "processing" }
+                        val doneCount = orders.count { it.order_status == "completed" }
+
+                        val ctx = androidx.compose.ui.platform.LocalContext.current
+                        LaunchedEffect(orders) {
+                            val currentPendingIds = orders.filter { it.order_status == "pending" }.map { it.id }.toSet()
+                            val newlyPending = currentPendingIds - viewModel.knownPendingIds
+                            if (newlyPending.isNotEmpty()) {
+                                com.example.restaurant.utils.SoundManager.playNewOrderSound(ctx)
+                            }
+                            viewModel.markPendingIdsAsSeen(newlyPending)
+                        }
+
+                        Box(
+                            modifier = Modifier.fillMaxWidth()
+                                .background(
+                                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        listOf(Color(0xFF2D1B00), WarmBrown)
+                                    )
+                                )
+                                .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 24.dp)
+                        ) {
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(icon, null, tint = if (isSelected) WarmBrown else Color(0xFFADB5BD), modifier = Modifier.size(22.dp))
+                                    Column {
+                                        Text("KITCHEN", fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f), letterSpacing = 3.sp)
+                                        Text("👨‍🍳 Bếp Trung Tâm", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                    }
+                                    Row {
+                                        val isSoundEnabled by com.example.restaurant.utils.SoundManager.isSoundEnabled.collectAsState()
+                                        IconButton(onClick = { com.example.restaurant.utils.SoundManager.toggleSound() }) {
+                                            Icon(
+                                                if (isSoundEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                                                contentDescription = "Bật/tắt âm thanh",
+                                                tint = Color.White.copy(alpha = 0.8f)
+                                            )
+                                        }
+                                        IconButton(onClick = onLogout) {
+                                            Icon(Icons.AutoMirrored.Filled.ExitToApp, null, tint = Color.White.copy(alpha = 0.8f))
+                                        }
+                                    }
                                 }
-                                Text(label, fontSize = 10.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) WarmBrown else Color(0xFFADB5BD))
+                                Spacer(Modifier.height(16.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Surface(
+                                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = StatusYellow.copy(alpha = 0.9f)
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Text("Chờ", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
+                                            Spacer(Modifier.height(6.dp))
+                                            Text("$pendingCount", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                        }
+                                    }
+                                    Surface(
+                                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = Color(0xFF2196F3).copy(alpha = 0.9f)
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Text("Đang nấu", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
+                                            Spacer(Modifier.height(6.dp))
+                                            Text("$processingCount", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                        }
+                                    }
+                                    Surface(
+                                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = StatusGreen.copy(alpha = 0.9f)
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Text("Xong", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
+                                            Spacer(Modifier.height(6.dp))
+                                            Text("$doneCount", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                        }
+                                    }
+                                }
                             }
                         }
+                        KitchenOrderList(token, viewModel)
                     }
+                    1 -> KitchenIngredientInventory(
+                             viewModel = viewModel,
+                             onScanClick = { uri ->
+                                 ingredientScanViewModel.scanIngredientImage(uri, viewModel.ingredients.value, context)
+                                 showIngredientScanResult = true
+                             }
+                         )
                 }
             }
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier.padding(padding).fillMaxSize()
+
+        // Nav pill nổi trực tiếp trên background
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
-            val orders by viewModel.orders.collectAsState()
-
-            when (selectedTab) {
-                0 -> {
-                    // Dashboard header chỉ hiện ở tab Đơn hàng
-                    val pendingCount = orders.count { it.order_status == "pending" }
-                    val processingCount = orders.count { it.order_status == "processing" }
-                    val doneCount = orders.count { it.order_status == "completed" }
-
-                    val ctx = androidx.compose.ui.platform.LocalContext.current
-                    LaunchedEffect(orders) {
-                        val currentPendingIds = orders.filter { it.order_status == "pending" }.map { it.id }.toSet()
-                        val newlyPending = currentPendingIds - viewModel.knownPendingIds
-                        if (newlyPending.isNotEmpty()) {
-                            com.example.restaurant.utils.SoundManager.playNewOrderSound(ctx)
-                        }
-                        viewModel.markPendingIdsAsSeen(newlyPending)
-                    }
-
-                    Box(
-                        modifier = Modifier.fillMaxWidth()
-                            .background(
-                                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    listOf(Color(0xFF2D1B00), WarmBrown)
-                                )
-                            )
-                            .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 24.dp)
-                    ) {
-                        Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                color = Color.White,
+                shadowElevation = 24.dp
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val navItems = listOf(
+                        Triple("Đơn hàng", Icons.AutoMirrored.Filled.List, 0),
+                        Triple("Nguyên liệu", Icons.Default.Build, 1)
+                    )
+                    navItems.forEach { (label, icon, index) ->
+                        val isSelected = selectedTab == index
+                        val scale by animateFloatAsState(
+                            targetValue = if (isSelected) 1f else 0.85f,
+                            animationSpec = spring(dampingRatio = 0.5f), label = "scale"
+                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f).clickable { selectedTab = index }.padding(vertical = 4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .graphicsLayer { scaleX = scale; scaleY = scale }
+                                    .background(if (isSelected) WarmBrown.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(14.dp))
+                                    .padding(horizontal = 22.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Column {
-                                    Text("KITCHEN", fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f), letterSpacing = 3.sp)
-                                    Text("👨‍🍳 Bếp Trung Tâm", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                }
-                                Row {
-                                    val isSoundEnabled by com.example.restaurant.utils.SoundManager.isSoundEnabled.collectAsState()
-                                    IconButton(onClick = { com.example.restaurant.utils.SoundManager.toggleSound() }) {
-                                        Icon(
-                                            if (isSoundEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff, 
-                                            contentDescription = "Bật/tắt âm thanh", 
-                                            tint = Color.White.copy(alpha = 0.8f)
-                                        )
-                                    }
-                                    IconButton(onClick = onLogout) {
-                                        Icon(Icons.AutoMirrored.Filled.ExitToApp, null, tint = Color.White.copy(alpha = 0.8f))
-                                    }
-                                }
+                                Icon(icon, null, tint = if (isSelected) WarmBrown else Color(0xFFADB5BD), modifier = Modifier.size(22.dp))
                             }
-                            Spacer(Modifier.height(16.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Surface(
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = StatusYellow.copy(alpha = 0.9f)
-                                ) {
-                                    Column(modifier = Modifier.padding(10.dp)) {
-                                        Text("Chờ", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
-                                        Spacer(Modifier.height(6.dp))
-                                        Text("$pendingCount", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                    }
-                                }
-                                Surface(
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = Color(0xFF2196F3).copy(alpha = 0.9f)
-                                ) {
-                                    Column(modifier = Modifier.padding(10.dp)) {
-                                        Text("Đang nấu", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
-                                        Spacer(Modifier.height(6.dp))
-                                        Text("$processingCount", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                    }
-                                }
-                                Surface(
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = StatusGreen.copy(alpha = 0.9f)
-                                ) {
-                                    Column(modifier = Modifier.padding(10.dp)) {
-                                        Text("Xong", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
-                                        Spacer(Modifier.height(6.dp))
-                                        Text("$doneCount", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                    }
-                                }
-                            }
+                            Text(label, fontSize = 10.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) WarmBrown else Color(0xFFADB5BD))
                         }
                     }
-                    KitchenOrderList(token, viewModel)
                 }
-                1 -> KitchenIngredientInventory(viewModel)
             }
         }
     }
@@ -509,12 +543,20 @@ fun KitchenStatusBadge(status: String) {
 // QUẢN LÝ NGUYÊN LIỆU
 // =====================================================
 @Composable
-fun KitchenIngredientInventory(viewModel: RestaurantViewModel) {
+fun KitchenIngredientInventory(
+    viewModel: RestaurantViewModel,
+    onScanClick: (Uri) -> Unit
+) {
     val ingredients by viewModel.ingredients.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
     var selectedIngredient by remember { mutableStateOf<Ingredient?>(null) }
     var ingredientToDelete by remember { mutableStateOf<Ingredient?>(null) }
     var searchQuery by remember { mutableStateOf("") }
+    var showLowStockOnly by remember { mutableStateOf(false) }
+
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> if (uri != null) onScanClick(uri) }
 
     LaunchedEffect(Unit) {
         viewModel.fetchInventory()
@@ -575,34 +617,77 @@ fun KitchenIngredientInventory(viewModel: RestaurantViewModel) {
 
         Spacer(Modifier.height(12.dp))
 
-        // Thanh tìm kiếm
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
+        // Thanh tìm kiếm + Scanner AI
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Tìm nguyên liệu...") },
-            singleLine = true,
-            shape = RoundedCornerShape(14.dp),
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
-            trailingIcon = {
-                if (searchQuery.isNotBlank()) {
-                    IconButton(onClick = { searchQuery = "" }) {
-                        Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(18.dp))
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Tìm nguyên liệu...") },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                trailingIcon = {
+                    if (searchQuery.isNotBlank()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(18.dp))
+                        }
                     }
                 }
+            )
+
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = Color(0xFF005BAA).copy(alpha = 0.1f),
+                modifier = Modifier.size(56.dp).clickable { imagePicker.launch("image/*") }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.CameraAlt, null, tint = Color(0xFF005BAA))
+                }
             }
-        )
+        }
 
         Spacer(Modifier.height(12.dp))
 
-        val filteredIngredients = if (searchQuery.isBlank()) ingredients
-            else ingredients.filter { it.name.contains(searchQuery, ignoreCase = true) }
+        // Filter chip sắp hết hàng
+        val lowCount = ingredients.count { it.stock < 5 }
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = if (showLowStockOnly) StatusRed else StatusRed.copy(alpha = 0.06f),
+            border = BorderStroke(1.dp, StatusRed.copy(alpha = if (showLowStockOnly) 1f else 0.3f)),
+            modifier = Modifier.clickable { showLowStockOnly = !showLowStockOnly }
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(Icons.Default.Warning, null, tint = if (showLowStockOnly) Color.White else StatusRed, modifier = Modifier.size(14.dp))
+                Text("Sắp hết ($lowCount)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (showLowStockOnly) Color.White else StatusRed)
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        val filteredIngredients = remember(ingredients, searchQuery, showLowStockOnly) {
+            ingredients
+                .filter { if (showLowStockOnly) it.stock < 5 else true }
+                .filter { it.name.contains(searchQuery, ignoreCase = true) }
+        }
 
         // Danh sách nguyên liệu
         if (filteredIngredients.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    if (searchQuery.isBlank()) "Kho bếp trống" else "Không tìm thấy \"$searchQuery\"",
+                    when {
+                        showLowStockOnly -> "Không có nguyên liệu nào sắp hết hàng 🎉"
+                        searchQuery.isNotBlank() -> "Không tìm thấy \"$searchQuery\""
+                        else -> "Kho bếp trống"
+                    },
                     color = Color.Gray,
                     fontSize = 14.sp
                 )

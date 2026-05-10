@@ -252,6 +252,12 @@ fun RestaurantApp() {
                     onNavigateToOrderHistory = {
                         navController.navigate(Screen.OrderHistory.route)
                     },
+                    onNavigateToReservation = {
+                        navController.navigate(Screen.Reservation.route)
+                    },
+                    onNavigateToReservationHistory = {
+                        navController.navigate(Screen.ReservationHistory.route)
+                    },
                     onLogout = {
                         restaurantViewModel.clearAllData()
                         clearSession()
@@ -279,6 +285,12 @@ fun RestaurantApp() {
                     token = token,
                     viewModel = restaurantViewModel,
                     authViewModel = authViewModel,
+                    onNavigateToVoucher = {
+                        navController.navigate(Screen.VoucherManagement.route)
+                    },
+                    onNavigateToReservationManagement = {
+                        navController.navigate(Screen.ReservationManagement.route)
+                    },
                     onLogout = {
                         restaurantViewModel.clearAllData()
                         clearSession()
@@ -311,6 +323,42 @@ fun RestaurantApp() {
                 authViewModel = authViewModel,
                 token = userToken,
                 currentTableId = currentTableId
+            )
+        }
+        composable(Screen.Reservation.route) {
+            userToken?.let { token ->
+                val reservationViewModel: com.example.restaurant.ui.viewmodel.ReservationViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                com.example.restaurant.ui.screens.ReservationScreen(
+                    token = token,
+                    authViewModel = authViewModel,
+                    reservationViewModel = reservationViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+        }
+        composable(Screen.ReservationHistory.route) {
+            userToken?.let { token ->
+                val reservationViewModel: com.example.restaurant.ui.viewmodel.ReservationViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                com.example.restaurant.ui.screens.ReservationHistoryScreen(
+                    token = token,
+                    viewModel = reservationViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+        }
+        composable(Screen.ReservationManagement.route) {
+            val reservationViewModel: com.example.restaurant.ui.viewmodel.ReservationViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+            com.example.restaurant.ui.screens.ReservationManagementScreen(
+                reservationViewModel = reservationViewModel,
+                restaurantViewModel = restaurantViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.VoucherManagement.route) {
+            val voucherViewModel: com.example.restaurant.ui.viewmodel.VoucherViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+            com.example.restaurant.ui.screens.VoucherManagementScreen(
+                viewModel = voucherViewModel,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

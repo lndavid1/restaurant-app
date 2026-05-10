@@ -1,0 +1,322 @@
+=========================================================
+SƠ ĐỒ 1: ĐỔI MẬT KHẨU QUA OTP EMAIL
+Dán vào: https://mermaid.live
+=========================================================
+
+sequenceDiagram
+    autonumber
+    actor User as Người dùng
+    participant App as Android App
+    participant Repo as AuthRepository
+    participant FS as Firestore DB
+    participant Mail as Email Service
+
+    User->>App: Nhập email, nhấn "Gửi mã OTP"
+    App->>FS: Kiểm tra tài khoản tồn tại?
+    FS-->>App: Tài khoản hợp lệ
+
+    App->>Repo: generateOTP(email)
+    Note over Repo: Sinh 6 số ngẫu nhiên<br/>Hash SHA-256(otp)
+    Repo->>FS: Lưu otp_hash, expired_at now+3min, attempts 0
+    Repo->>Mail: Gửi email OTP tới người dùng
+    Mail-->>User: Email chứa mã 6 số
+
+    User->>App: Nhập mã OTP nhận được
+    App->>Repo: verifyOTP(email, input)
+    Repo->>FS: Đọc document otp_verifications/email
+
+    alt OTP hết hạn (now > expired_at)
+        Repo-->>App: Lỗi - Mã đã hết hạn
+        App-->>User: Thông báo lỗi, cho gửi lại
+    else Sai mã (attempts >= 5)
+        Repo->>FS: set locked_until = now + 5min
+        Repo-->>App: Tài khoản bị khóa 5 phút
+        App-->>User: Hiển thị countdown
+    else OTP hợp lệ
+        Repo-->>App: Xác minh thành công
+        App-->>User: Mở form nhập mật khẩu mới
+        User->>App: Nhập mật khẩu mới
+        App->>Repo: updatePassword(newPassword)
+        Repo->>Repo: FirebaseAuth.updatePassword()
+        Repo->>FS: Xóa document OTP (dọn dẹp)
+        Repo-->>App: Thành công
+        App-->>User: Đổi mật khẩu thành công!
+    end
+
+
+=========================================================
+SƠ ĐỒ 2: SCAN MENU THỰC ĐƠN BẰNG AI
+=========================================================
+
+sequenceDiagram
+    autonumber
+    actor Admin as Admin
+    participant App as Android App
+    participant VM as MenuScanViewModel
+    participant Gemini as Gemini 2.5 Flash API
+    participant Pexels as Pexels API
+    participant Storage as Firebase Storage
+    participant FS as Firestore DB
+
+    Admin->>App: Nhấn "Scan Menu", chọn ảnh thực đơn giấy
+    App->>VM: scanMenuImage(uri, products, categories)
+    VM->>VM: Encode ảnh base64
+
+    VM->>Gemini: POST ảnh + prompt phân tích thực đơn
+    Note over Gemini: Phân tích từng dòng thực đơn<br/>Nhận dạng tên, giá, danh mục<br/>Dịch tên sang tiếng Anh
+    Gemini-->>VM: JSON danh sách tên, giá, danh mục, công thức, keyword
+
+    VM->>VM: So sánh với products hiện có, đánh dấu trùng tên
+    loop Với mỗi món đã nhận dạng
+        VM->>Pexels: GET /search?query=englishKeyword
+        Pexels-->>VM: URL ảnh minh họa
+    end
+
+    VM-->>App: Kết quả scan (danh sách + trạng thái trùng/mới)
+    App-->>Admin: Hiển thị MenuScanResultScreen<br/>Highlight giá=0 màu cam - Cảnh báo trùng
+
+    Admin->>App: Xem xét, sửa giá/tên, bỏ tick món không muốn
+    Admin->>App: Nhấn "Xác nhận"
+
+    loop Với mỗi món được chọn
+        App->>Storage: Upload ảnh lên Firebase Storage
+        Storage-->>App: Download URL
+    end
+    App->>FS: Batch write tất cả món vào collection products
+    FS-->>App: Thành công
+    App-->>Admin: Tự động reload thực đơn
+
+
+=========================================================
+SƠ ĐỒ 3: SCAN HÓA ĐƠN NHẬP KHO NGUYÊN LIỆU BẰNG AI
+=========================================================
+
+sequenceDiagram
+    autonumber
+    actor Staff as Bếp hoặc Admin
+    participant App as Android App
+    participant VM as IngredientScanViewModel
+    participant Gemini as Gemini AI API
+    participant FS as Firestore DB
+
+    Staff->>App: Chụp hoặc chọn ảnh hóa đơn nhập kho
+    App->>VM: scanIngredientImage(uri, currentIngredients)
+    VM->>VM: Encode ảnh base64
+
+    VM->>Gemini: POST ảnh + prompt nhận dạng hóa đơn
+    Note over Gemini: Phân tích từng dòng hóa đơn<br/>Nhận dạng tên, số lượng, đơn vị
+    Gemini-->>VM: JSON danh sách tên, số lượng, đơn vị
+
+    VM->>VM: So sánh tên với kho hiện tại
+    Note over VM: Không trùng - nguyên liệu mới (xanh)<br/>Trùng tên - sẽ cộng thêm vào kho (cam)
+
+    VM-->>App: Kết quả phân loại (mới / trùng)
+    App-->>Staff: Hiển thị danh sách với checkbox và màu phân loại
+
+    Staff->>App: Chỉnh sửa số lượng nếu cần
+    Staff->>App: Bỏ tick những dòng không muốn nhập
+    Staff->>App: Nhấn "Xác nhận nhập kho"
+
+    loop Với mỗi mục được chọn
+        alt Nguyên liệu mới
+            App->>FS: addDoc ingredients - tên, đơn vị, số lượng
+        else Nguyên liệu đã có (trùng tên)
+            App->>FS: updateDoc - stock cộng thêm số lượng (atomic)
+            Note over FS: FieldValue.increment - không cần đọc-sửa-ghi thủ công
+        end
+    end
+    FS-->>App: Ghi thành công
+    App->>FS: Fetch lại danh sách nguyên liệu
+    App-->>Staff: Hiển thị tồn kho đã cập nhật
+
+
+=========================================================
+SƠ ĐỒ 4: THANH TOÁN QUA CỔNG PAYOS
+=========================================================
+
+sequenceDiagram
+    autonumber
+    actor Customer as Khách hàng
+    actor Staff as Nhân viên
+    participant AppS as App Nhân viên
+    participant VM as RestaurantViewModel
+    participant PayOS as PayOS API Server
+    participant FS as Firestore DB
+    participant AppC as App Khách hàng
+
+    Customer->>AppC: Nhấn "Yêu cầu thanh toán"
+    AppC->>FS: Cập nhật payment_status = requested
+    FS-->>AppS: Snapshot Listener báo yêu cầu mới
+    AppS-->>Staff: Âm thanh + badge đỏ trên tab Thanh toán
+
+    Staff->>AppS: Chọn đơn, nhấn "Thanh toán PayOS"
+    AppS->>VM: createPayOSPayment(orderId, amount)
+    VM->>PayOS: POST tạo payment order với orderCode, amount, returnUrl
+    PayOS-->>VM: checkoutUrl, qrCode, orderCode
+
+    VM->>FS: Lưu payos_order_code vào Order document
+    FS-->>AppC: Snapshot Listener nhận payos_order_code
+    AppC-->>Customer: Hiển thị nút "Thanh toán PayOS"
+    Customer->>AppC: Nhấn nút - mở WebView trang thanh toán
+    Customer->>PayOS: Quét QR hoặc thanh toán trực tuyến
+
+    par Webhook (chính)
+        PayOS->>FS: Webhook callback - payment_status = paid
+    and Polling (dự phòng)
+        loop Mỗi 3 giây
+            AppC->>PayOS: Kiểm tra trạng thái giao dịch
+            PayOS-->>AppC: Trạng thái hiện tại
+        end
+    end
+
+    FS-->>AppC: payment_status = paid
+    AppC->>VM: stopPolling()
+    VM->>FS: checkoutTable - giải phóng bàn, cộng điểm tích lũy
+    AppC-->>Customer: Thanh toán thành công!
+
+
+=========================================================
+SƠ ĐỒ 5: AI CHATBOT TƯ VẤN MÓN ĂN
+=========================================================
+
+sequenceDiagram
+    autonumber
+    actor User as Người dùng
+    participant Screen as ChatbotScreen
+    participant VM as ChatViewModel
+    participant Gemini as Gemini 2.5 Flash API
+    participant FS as Firestore DB
+
+    User->>Screen: Nhấn nút mở Chatbot
+    Screen->>VM: init()
+    VM->>FS: Tải lịch sử chat ai_chat_history/uid
+    FS-->>VM: Danh sách tin nhắn cũ
+    VM-->>Screen: Hiển thị lịch sử chat
+
+    User->>Screen: Gõ câu hỏi (VD: Gợi ý món không cay dưới 100k)
+    Screen->>VM: sendMessage(userText)
+    VM->>VM: Lấy products từ StateFlow (cache sẵn, không fetch lại)
+    VM->>VM: Xây dựng system prompt động bao gồm toàn bộ menu thực tế
+
+    VM->>Gemini: Gửi systemPrompt + lịch sử + câu hỏi (streaming)
+    Note over Gemini: Phân tích yêu cầu<br/>Đối chiếu với menu thực tế<br/>Gợi ý món phù hợp
+
+    loop Streaming response
+        Gemini-->>VM: Từng đoạn text
+        VM-->>Screen: Cập nhật UI hiển thị từng chữ
+    end
+
+    alt AI gợi ý món cụ thể
+        VM->>VM: Parse danh sách productId, tên, giá, lý do
+        VM-->>Screen: Hiển thị card món ăn với ảnh, tên, giá, nút Thêm vào giỏ
+    end
+
+    VM->>FS: Lưu cặp câu hỏi và câu trả lời vào Firestore
+
+    opt Người dùng nhấn "Thêm vào giỏ"
+        Screen->>Screen: Chuyển sang CartScreen với món đã chọn
+    end
+
+
+=========================================================
+SƠ ĐỒ 6: ĐẶT BÀN TRƯỚC
+=========================================================
+
+sequenceDiagram
+    autonumber
+    actor Customer as Khách hàng
+    participant Screen as ReservationScreen
+    participant VM as ReservationViewModel
+    participant FS as Firestore DB
+    actor Staff as Admin hoặc Nhân viên
+
+    Customer->>Screen: Mở màn hình "Đặt bàn trước"
+    Screen->>VM: init(token)
+    VM->>FS: Truy vấn lịch đặt đang pending hoặc confirmed của người dùng
+    FS-->>VM: Danh sách lịch đặt hiện tại
+
+    alt Đang có lịch chưa dùng
+        VM-->>Screen: Khóa form đặt bàn
+        Screen-->>Customer: Bạn đang có lịch đặt chưa hoàn thành. Vui lòng hủy trước khi đặt mới.
+    else Không có lịch pending
+        Screen-->>Customer: Hiển thị form đặt bàn
+
+        Note over Customer,Screen: Tên và SĐT tự điền từ profile Firestore
+        Customer->>Screen: Chọn ngày đến (mặc định ngày mai)
+        Customer->>Screen: Chọn giờ đến (mặc định 18:00)
+        Customer->>Screen: Nhập số lượng người (tối đa 20)
+        Customer->>Screen: Nhập ghi chú đặc biệt (tùy chọn)
+        Customer->>Screen: Nhấn "Xác nhận đặt bàn"
+
+        Screen->>VM: Kiểm tra dữ liệu bắt buộc (tên, SĐT, ngày)
+        alt Thiếu thông tin bắt buộc
+            VM-->>Screen: Thông báo lỗi
+        else Hợp lệ
+            VM->>FS: Tạo document reservations với trạng thái pending
+            FS-->>VM: Thành công
+            VM-->>Screen: Đặt bàn thành công, quay lại màn hình trước
+
+            FS-->>Staff: Snapshot Listener báo có lịch đặt mới
+            Staff->>FS: Xem danh sách đặt bàn
+
+            alt Duyệt lịch
+                Staff->>FS: Cập nhật status = confirmed
+                FS-->>Customer: Cập nhật realtime - Đã xác nhận
+            else Từ chối
+                Staff->>FS: Cập nhật status = cancelled
+                FS-->>Customer: Cập nhật realtime - Đã bị hủy
+            end
+        end
+    end
+
+
+=========================================================
+SƠ ĐỒ 7: XỬ LÝ ĐƠN HÀNG END-TO-END
+=========================================================
+
+sequenceDiagram
+    autonumber
+    actor CustStaff as Khách hoặc Nhân viên
+    participant App as Android App
+    participant VM as RestaurantViewModel
+    participant FS as Firestore DB
+    participant Kitchen as App Bếp
+    participant Stock as Kho Nguyên Liệu
+
+    CustStaff->>App: Chọn bàn, duyệt thực đơn, thêm vào giỏ hàng
+    CustStaff->>App: Nhấn "Gửi đơn lên bếp"
+    App->>VM: submitOrder(tableId, cartItems)
+    VM->>FS: Tạo Order với table_id, danh sách món kèm recipe_snapshot, tổng tiền, trạng thái pending
+    Note over FS: recipe_snapshot là bản sao công thức<br/>tại thời điểm đặt - lịch sử bất biến
+
+    FS-->>Kitchen: Snapshot Listener báo có đơn mới
+    Kitchen->>Kitchen: Phát âm thanh cảnh báo
+    Kitchen-->>Kitchen: Hiển thị badge vàng CHỜ DUYỆT
+
+    Kitchen->>FS: Cập nhật order_status = processing
+    Kitchen-->>Kitchen: Hiển thị badge xanh ĐANG NẤU
+    Note over Kitchen: Bếp chế biến món ăn...
+
+    Kitchen->>FS: Cập nhật order_status = completed
+
+    FS->>VM: Kích hoạt trừ kho nguyên liệu
+    Note over VM,Stock: FIRESTORE TRANSACTION - Nguyên tử
+    VM->>FS: Đọc recipe_snapshot, tính tổng nguyên liệu cần, trừ kho trong 1 lần commit
+    FS-->>Stock: Cập nhật tồn kho nguyên liệu
+    Note over FS: Nếu xung đột thì tự động thử lại<br/>Đảm bảo tính nguyên tử
+
+    FS-->>App: Đơn hoàn thành - thông báo nhân viên
+    CustStaff->>App: Chọn phương thức thanh toán
+
+    alt Tiền mặt
+        CustStaff->>VM: checkoutTable(tableId)
+    else VNPAY hoặc PayOS
+        CustStaff->>VM: Tạo mã QR thanh toán
+        Note over VM: Xem luồng chi tiết ở Sơ đồ 4
+    end
+
+    VM->>FS: Checkout - cập nhật hàng loạt
+    Note over VM,FS: payment_status = paid<br/>Cộng điểm tích lũy 1% giá trị đơn<br/>Cộng doanh thu ngày (atomic)<br/>table.status = available
+
+    FS-->>App: Snapshot Listener - tất cả thiết bị cập nhật đồng thời
+    App-->>CustStaff: Thanh toán hoàn tất, bàn đã trống

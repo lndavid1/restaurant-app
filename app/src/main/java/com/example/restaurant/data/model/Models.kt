@@ -63,7 +63,9 @@ data class Product(
     val category_name: String? = null,
     val ingredients: String? = null,
     @get:PropertyName("is_featured") @set:PropertyName("is_featured") var is_featured: Boolean = false,
-    val recipe: List<RecipeItem>? = emptyList()   // Công thức định lượng nguyên liệu
+    val recipe: List<RecipeItem>? = emptyList(),   // Công thức định lượng nguyên liệu
+    val average_rating: Double = 0.0,
+    val review_count: Int = 0
 )
 
 data class RestaurantTable(
@@ -131,12 +133,15 @@ data class Voucher(
     val id: String = "",
     val code: String = "",
     val discount_amount: Double = 0.0,
-    val is_percent: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("is_percent") @set:com.google.firebase.firestore.PropertyName("is_percent")
+    @get:JvmName("getIsPercent") @set:JvmName("setIsPercent")
+    var is_percent: Boolean = false,
     val min_order_value: Double = 0.0,
     val max_discount: Double? = null,
     val valid_until: Long = 0L,
     val usage_limit: Int = 0,
-    val times_used: Int = 0
+    val times_used: Int = 0,
+    val required_tier: String = "all"
 )
 
 data class Review(

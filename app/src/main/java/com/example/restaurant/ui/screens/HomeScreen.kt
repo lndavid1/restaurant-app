@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Star
 import com.example.restaurant.ui.theme.premiumBackground
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -310,6 +311,17 @@ fun ProductCustomerItem(
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(product.description ?: "", style = MaterialTheme.typography.bodySmall, maxLines = 1, color = Color.Gray)
                 }
+                
+                if (product.review_count > 0) {
+                    Spacer(Modifier.height(3.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Star, null, tint = Color(0xFFFFB300), modifier = Modifier.size(12.dp))
+                        Spacer(Modifier.width(2.dp))
+                        Text(String.format("%.1f", product.average_rating), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                        Text(" (${product.review_count})", fontSize = 10.sp, color = Color.LightGray)
+                    }
+                }
+                
                 Spacer(modifier = Modifier.height(6.dp))
                 
                 // Badge Tình trạng kho
@@ -389,7 +401,39 @@ fun ProductDetailDialog(product: Product, onDismiss: () -> Unit) {
                     Spacer(Modifier.height(12.dp))
                 }
                 Text(text = product.name, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                Spacer(Modifier.height(4.dp))
+                
+                if (product.review_count > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = String.format("%.1f", product.average_rating),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color(0xFFFFB300)
+                        )
+                        Icon(
+                            Icons.Default.Star,
+                            contentDescription = "Rating",
+                            tint = Color(0xFFFFB300),
+                            modifier = Modifier.size(16.dp).padding(horizontal = 2.dp)
+                        )
+                        Text(
+                            text = "(${product.review_count} lượt đánh giá)",
+                            fontSize = 13.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Chưa có đánh giá",
+                        fontSize = 13.sp,
+                        color = Color.Gray,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
+                
                 Text(text = "${product.price.toVndFormat()} VNĐ", color = WarmBrown, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 
                 Spacer(Modifier.height(16.dp))

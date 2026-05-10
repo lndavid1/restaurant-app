@@ -73,6 +73,8 @@ fun AdminDashboardScreen(
     token: String,
     viewModel: RestaurantViewModel,
     authViewModel: AuthViewModel,
+    onNavigateToVoucher: () -> Unit = {},
+    onNavigateToReservationManagement: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -81,6 +83,7 @@ fun AdminDashboardScreen(
 
     // Sub-screen state for invoices
     var showInvoiceList by remember { mutableStateOf(false) }
+    var selectedInvoiceDate by remember { mutableStateOf<String?>(null) } // null = hôm nay
     var selectedOrder by remember { mutableStateOf<Order?>(null) }
 
     // collectLatest trong LaunchedEffect đã lifecycle-safe (tied to Composition)
@@ -108,12 +111,13 @@ fun AdminDashboardScreen(
         return
     }
 
-    // Navigate to invoice list screen
+    // Navigate to invoice list screen (hôm nay hoặc ngày cụ thể)
     if (showInvoiceList) {
         AdminInvoiceTodayScreen(
             token = token,
             viewModel = viewModel,
-            onBack = { showInvoiceList = false },
+            date = selectedInvoiceDate,
+            onBack = { showInvoiceList = false; selectedInvoiceDate = null },
             onOrderClick = { order -> selectedOrder = order }
         )
         return
@@ -136,148 +140,173 @@ fun AdminDashboardScreen(
         return
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize().premiumBackground(),
-        containerColor = Color.Transparent,
-        bottomBar = {
-            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
-                    color = Color.White,
-                    shadowElevation = 16.dp
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val navItems = listOf(
-                            Triple("Tổng quan", Icons.Default.Home, 0),
-                            Triple("Quản lý bàn", Icons.Default.TableRestaurant, 1),
-                            Triple("Thực đơn", Icons.Default.RestaurantMenu, 2),
-                            Triple("Thống kê", Icons.Default.BarChart, 3),
-                            Triple("Kho NL", Icons.Default.ShoppingCart, 4),
-                            Triple("Nhân viên", Icons.Default.Badge, 5)
-                        )
-                        navItems.forEach { (label, icon, index) ->
-                            val isSelected = selectedTab == index
-                            val scale by animateFloatAsState(
-                                targetValue = if (isSelected) 1f else 0.85f,
-                                animationSpec = spring(dampingRatio = 0.5f), label = "navScale"
-                            )
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.weight(1f).clickable { selectedTab = index }.padding(vertical = 4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .graphicsLayer { scaleX = scale; scaleY = scale }
-                                        .background(if (isSelected) WarmBrown.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(14.dp))
-                                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
+    Box(modifier = Modifier.fillMaxSize().premiumBackground()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+        ) { _ ->
+            Column(modifier = Modifier.fillMaxSize()) {
+                val allTables by viewModel.tables.collectAsState()
+                val allOrders by viewModel.orders.collectAsState()
+
+                when (selectedTab) {
+                    0 -> {
+                        val occupiedCount = allTables.count { it.status == "occupied" }
+                        val availableCount = allTables.count { it.status == "available" }
+
+                        Box(
+                            modifier = Modifier.fillMaxWidth()
+                                .background(
+                                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        listOf(WarmBrown, WarmBrown.copy(alpha = 0.80f))
+                                    )
+                                )
+                                .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 24.dp)
+                        ) {
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(icon, null, tint = if (isSelected) WarmBrown else Color(0xFFADB5BD), modifier = Modifier.size(22.dp))
+                                    Column {
+                                        Text("WELCOME BACK", fontSize = 11.sp, color = Color.White.copy(alpha = 0.75f), letterSpacing = 2.sp)
+                                        Text("Admin Dashboard", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                    }
+                                    TextButton(onClick = onLogout) {
+                                        Icon(Icons.AutoMirrored.Filled.ExitToApp, null, tint = Color.White)
+                                    }
                                 }
-                                Text(label, fontSize = 9.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) WarmBrown else Color(0xFFADB5BD))
+                                Spacer(Modifier.height(16.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Surface(
+                                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = Color.White.copy(alpha = 0.2f)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text("Tổng bàn", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
+                                            Spacer(Modifier.height(6.dp))
+                                            Text("${allTables.size}", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                        }
+                                    }
+                                    Surface(
+                                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = Color(0xFF6B9B76).copy(alpha = 0.9f)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text("Trống", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
+                                            Spacer(Modifier.height(6.dp))
+                                            Text("$availableCount", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                        }
+                                    }
+                                    Surface(
+                                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = Color(0xFFD9534F).copy(alpha = 0.9f)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text("Đang dùng", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
+                                            Spacer(Modifier.height(6.dp))
+                                            Text("$occupiedCount", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                        }
+                                    }
+                                }
                             }
                         }
+                        AdminMainHome(token, viewModel, modifier = Modifier.weight(1f))
                     }
+                    1 -> AdminTableManager(token, viewModel)
+                    2 -> AdminProductInventory(token, viewModel)
+                    3 -> AdminStatsView(token, viewModel, onInvoiceListClick = { date ->
+                        selectedInvoiceDate = date
+                        showInvoiceList = true
+                    })
+                    4 -> AdminIngredientInventory(
+                             token = token,
+                             viewModel = viewModel,
+                             onScanClick = { uri ->
+                                 ingredientScanViewModel.scanIngredientImage(uri, viewModel.ingredients.value, context)
+                                 showIngredientScanResult = true
+                             }
+                         )
+                    5 -> {
+                        LaunchedEffect(Unit) {
+                            onNavigateToVoucher()
+                            selectedTab = 0
+                        }
+                    }
+                    6 -> {
+                        LaunchedEffect(Unit) {
+                            onNavigateToReservationManagement()
+                            selectedTab = 0
+                        }
+                    }
+                    7 -> StaffManagementView(authViewModel)
                 }
             }
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier.padding(padding).fillMaxSize()
+
+        // Nav pill nổi trực tiếp trên background
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
-            val allTables by viewModel.tables.collectAsState()
-            val allOrders by viewModel.orders.collectAsState()
-
-            when (selectedTab) {
-                0 -> {
-                    // Dashboard header chỉ hiện ở Tổng quan
-                    val occupiedCount = allTables.count { it.status == "occupied" }
-                    val availableCount = allTables.count { it.status == "available" }
-
-                    Box(
-                        modifier = Modifier.fillMaxWidth()
-                            .background(
-                                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    listOf(WarmBrown, WarmBrown.copy(alpha = 0.80f))
-                                )
-                            )
-                            .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 24.dp)
-                    ) {
-                        Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                color = Color.White,
+                shadowElevation = 24.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val navItems = listOf(
+                        Triple("Tổng quan", Icons.Default.Home, 0),
+                        Triple("Bàn", Icons.Default.TableRestaurant, 1),
+                        Triple("Thực đơn", Icons.Default.RestaurantMenu, 2),
+                        Triple("Thống kê", Icons.Default.BarChart, 3),
+                        Triple("Kho NL", Icons.Default.ShoppingCart, 4),
+                        Triple("Khuyến mãi", Icons.Default.CardGiftcard, 5),
+                        Triple("Đặt bàn", Icons.Default.EventSeat, 6),
+                        Triple("Tài khoản", Icons.Default.People, 7)
+                    )
+                    navItems.forEach { (label, icon, index) ->
+                        val isSelected = selectedTab == index
+                        val scale by animateFloatAsState(
+                            targetValue = if (isSelected) 1f else 0.85f,
+                            animationSpec = spring(dampingRatio = 0.5f), label = "navScale"
+                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(68.dp).clickable { selectedTab = index }.padding(vertical = 4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .graphicsLayer { scaleX = scale; scaleY = scale }
+                                    .background(if (isSelected) WarmBrown.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(14.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Column {
-                                    Text("WELCOME BACK", fontSize = 11.sp, color = Color.White.copy(alpha = 0.75f), letterSpacing = 2.sp)
-                                    Text("Admin Dashboard", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                }
-                                TextButton(onClick = onLogout) {
-                                    Icon(Icons.AutoMirrored.Filled.ExitToApp, null, tint = Color.White)
-                                }
+                                Icon(icon, null, tint = if (isSelected) WarmBrown else Color(0xFFADB5BD), modifier = Modifier.size(22.dp))
                             }
-                            Spacer(Modifier.height(16.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                // Stat cards với wrapContentHeight để không bị cắt
-                                Surface(
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = Color.White.copy(alpha = 0.2f)
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("Tổng bàn", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
-                                        Spacer(Modifier.height(6.dp))
-                                        Text("${allTables.size}", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                    }
-                                }
-                                Surface(
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = Color(0xFF6B9B76).copy(alpha = 0.9f)
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("Trống", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
-                                        Spacer(Modifier.height(6.dp))
-                                        Text("$availableCount", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                    }
-                                }
-                                Surface(
-                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = Color(0xFFD9534F).copy(alpha = 0.9f)
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("Đang dùng", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f))
-                                        Spacer(Modifier.height(6.dp))
-                                        Text("$occupiedCount", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                    }
-                                }
-                            }
+                            Text(label, fontSize = 9.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) WarmBrown else Color(0xFFADB5BD))
                         }
                     }
-                    AdminMainHome(token, viewModel, modifier = Modifier.weight(1f))
                 }
-                1 -> AdminTableManager(token, viewModel)
-                2 -> AdminProductInventory(token, viewModel)
-                3 -> AdminStatsView(token, viewModel, onInvoiceListClick = { showInvoiceList = true })
-                4 -> AdminIngredientInventory(
-                         token = token,
-                         viewModel = viewModel,
-                         onScanClick = { uri ->
-                             ingredientScanViewModel.scanIngredientImage(uri, viewModel.ingredients.value, context)
-                             showIngredientScanResult = true
-                         }
-                     )
-                5 -> StaffManagementView(authViewModel)
             }
         }
     }
@@ -601,6 +630,8 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
     var showClearAllConfirm by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategoryId by remember { mutableStateOf<Int?>(null) }
+    var showLowStockOnly by remember { mutableStateOf(false) }
+    var showNoRecipeOnly by remember { mutableStateOf(false) }
 
     // MenuScan state
     val scanViewModel: MenuScanViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -638,10 +669,12 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
     }
 
     // remember wrap — tránh recompute mỗi recompose
-    val filteredProducts = remember(products, searchQuery, selectedCategoryId) {
+    val filteredProducts = remember(products, searchQuery, selectedCategoryId, showLowStockOnly, showNoRecipeOnly, stockStatusMap) {
         products.filter {
             (selectedCategoryId == null || it.category_id == selectedCategoryId) &&
-            it.name.contains(searchQuery, ignoreCase = true)
+            it.name.contains(searchQuery, ignoreCase = true) &&
+            (!showLowStockOnly || stockStatusMap[it.id] == StockStatus.LOW_STOCK || stockStatusMap[it.id] == StockStatus.OUT_OF_STOCK) &&
+            (!showNoRecipeOnly || stockStatusMap[it.id] == StockStatus.NO_RECIPE)
         }
     }
 
@@ -710,15 +743,15 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("Quan ly thuc don", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+                        Text("Quản lý thực đơn", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "${products.size} mon",
+                            "${products.size} món",
                             color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            "${categories.size} danh muc  -  $featuredCount noi bat",
+                            "${categories.size} danh mục  -  $featuredCount Món nổi bật",
                             color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp
                         )
                     }
@@ -761,16 +794,16 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                                 contentAlignment = Alignment.Center
                             ) { Text("\u2B50", fontSize = 16.sp) }
                             Spacer(Modifier.width(8.dp))
-                            Text("Noi bat", fontSize = 12.sp, color = Color.Gray)
+                            Text("Món nổi bật", fontSize = 12.sp, color = Color.Gray)
                         }
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            "$featuredCount mon",
+                            "$featuredCount món",
                             fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color(0xFF1E293B)
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
-                            "Hien thi uu tien",
+                            "Hiển thị ưu tiên",
                             fontSize = 11.sp, color = Color(0xFFFFB300), fontWeight = FontWeight.Medium
                         )
                     }
@@ -799,7 +832,7 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
-                            "${filteredProducts.size} mon hien thi",
+                            "${filteredProducts.size} món hiển thị",
                             fontSize = 11.sp, color = WarmBrown, fontWeight = FontWeight.Medium
                         )
                     }
@@ -820,7 +853,7 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Tim kiem mon an...", color = Color.Gray) },
+                        placeholder = { Text("Tìm kiếm món ăn...", color = Color.Gray) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         leadingIcon = { Icon(Icons.Default.Search, null, tint = WarmBrown, modifier = Modifier.size(18.dp)) },
@@ -843,7 +876,7 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                             ) {
                                 Icon(Icons.Default.CameraAlt, null, tint = Color.White, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("AI Quet", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text("AI Quét", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                         Surface(
@@ -859,7 +892,7 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                             ) {
                                 Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Them mon", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Thêm món", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                         Surface(
@@ -870,6 +903,41 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                         ) {
                             Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Default.DeleteForever, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                    // Filter chips
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val lowCount = products.count { stockStatusMap[it.id] == StockStatus.LOW_STOCK || stockStatusMap[it.id] == StockStatus.OUT_OF_STOCK }
+                        val noRecipeCount = products.count { stockStatusMap[it.id] == StockStatus.NO_RECIPE }
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (showLowStockOnly) Color(0xFFD9534F) else Color(0xFFF7F3EE),
+                            border = BorderStroke(1.dp, if (showLowStockOnly) Color(0xFFD9534F) else Color.LightGray.copy(alpha = 0.4f)),
+                            modifier = Modifier.clickable { showLowStockOnly = !showLowStockOnly; if (showLowStockOnly) showNoRecipeOnly = false }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(Icons.Default.Warning, null, tint = if (showLowStockOnly) Color.White else StatusRed, modifier = Modifier.size(13.dp))
+                                Text("Sắp hết ($lowCount)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (showLowStockOnly) Color.White else StatusRed)
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (showNoRecipeOnly) Color.Gray else Color(0xFFF7F3EE),
+                            border = BorderStroke(1.dp, if (showNoRecipeOnly) Color.Gray else Color.LightGray.copy(alpha = 0.4f)),
+                            modifier = Modifier.clickable { showNoRecipeOnly = !showNoRecipeOnly; if (showNoRecipeOnly) showLowStockOnly = false }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(Icons.Default.HelpOutline, null, tint = if (showNoRecipeOnly) Color.White else Color.Gray, modifier = Modifier.size(13.dp))
+                                Text("Chưa có CT ($noRecipeCount)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (showNoRecipeOnly) Color.White else Color.Gray)
                             }
                         }
                     }
@@ -886,7 +954,7 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                 shadowElevation = 2.dp
             ) {
                 Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-                    Text("Danh muc", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                    Text("Danh mục", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(8.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item {
@@ -898,7 +966,7 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                                 modifier = Modifier.clickable { selectedCategoryId = null }
                             ) {
                                 Text(
-                                    text = "Tat ca (${products.size})",
+                                    text = "Tất cả (${products.size})",
                                     color = if (isSelected) Color.White else Color.DarkGray,
                                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
@@ -944,7 +1012,7 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("\uD83C\uDF7D\uFE0F", fontSize = 36.sp)
-                            Text("Chua co mon nao", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text("Chưa có món nào", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -1001,10 +1069,10 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                                 Spacer(Modifier.width(8.dp))
                                 val stockStatus = stockStatusMap[product.id] ?: StockStatus.NO_RECIPE
                                 val (statusText, statusColor) = when (stockStatus) {
-                                    StockStatus.OK -> "Con hang" to StatusGreen
-                                    StockStatus.LOW_STOCK -> "Sap het" to StatusYellow
-                                    StockStatus.OUT_OF_STOCK -> "Het hang" to StatusRed
-                                    StockStatus.NO_RECIPE -> "Chua co CT" to Color.Gray
+                                    StockStatus.OK -> "Còn hàng" to StatusGreen
+                                    StockStatus.LOW_STOCK -> "Sắp hết" to StatusYellow
+                                    StockStatus.OUT_OF_STOCK -> "Hết hàng" to StatusRed
+                                    StockStatus.NO_RECIPE -> "Chưa có CT" to Color.Gray
                                 }
                                 Surface(shape = RoundedCornerShape(6.dp), color = statusColor.copy(alpha = 0.13f)) {
                                     Text(
@@ -1022,7 +1090,7 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                             ) {
                                 Icon(
                                     if (product.is_featured) Icons.Default.Star else Icons.Default.StarOutline,
-                                    contentDescription = "Noi bat",
+                                    contentDescription = "Món nổi bật",
                                     tint = if (product.is_featured) Color(0xFFFFB300) else Color.LightGray,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -1031,12 +1099,12 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
                                 TextButton(
                                     onClick = { selectedProduct = product; showDialog = true },
                                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
-                                ) { Text("Sua", color = WarmBrown, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                                ) { Text("Sửa", color = WarmBrown, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
                                 Text("|", color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterVertically))
                                 TextButton(
                                     onClick = { productToDelete = product },
                                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
-                                ) { Text("Xoa", color = StatusRed, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                                ) { Text("Xóa", color = StatusRed, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
                             }
                         }
                     }
@@ -1576,7 +1644,7 @@ fun DeleteConfirmDialog(
 // TAB 3: Thống kê (layout mới + AI Analytics)
 // =====================================================
 @Composable
-fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListClick: () -> Unit) {
+fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListClick: (date: String?) -> Unit) {
     val orders by viewModel.orders.collectAsState()
     val history by viewModel.dailyRevenueHistory.collectAsState()
 
@@ -1593,15 +1661,15 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
         if (uri != null) {
             try {
                 context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    val csvHeader = "\"Ngày\"\t\"Doanh thu (VND)\"\t\"Số lượng đơn\"\n"
                     // Sắp xếp ngày từ mới nhất đến cũ nhất
                     val sortedData = currentHistory.sortedByDescending { it.date }
-                    val csvData = sortedData.joinToString("\n") { "\"${it.date}\"\t${it.revenue.toLong()}\t${it.order_count}" }
+                    val csvHeader = "Ngày,Doanh thu (VND),Số lượng đơn\n"
+                    val csvData = sortedData.joinToString("\n") { "${it.date},${it.revenue.toLong()},${it.order_count}" }
                     val csvContent = csvHeader + csvData
-                    // Thêm BOM UTF-16LE để Excel (mọi phiên bản/mọi vùng) hiển thị tiếng Việt chuẩn
-                    // và phân tách cột bằng Tab (Excel mặc định nhận diện Tab cho UTF-16LE CSV)
-                    outputStream.write(byteArrayOf(0xFF.toByte(), 0xFE.toByte()))
-                    outputStream.write(csvContent.toByteArray(Charsets.UTF_16LE))
+                    // UTF-8 BOM (EF BB BF): Excel, Google Sheets, WPS Office đều nhận dạng
+                    // tiếng Việt chuẩn và phân tách cột bằng dấu phẩy (chuẩn CSV)
+                    outputStream.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
+                    outputStream.write(csvContent.toByteArray(Charsets.UTF_8))
                 }
                 android.widget.Toast.makeText(context, "Xuất CSV thành công!", android.widget.Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
@@ -1675,7 +1743,7 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
         // --- Hóa đơn hôm nay ---
         item {
             Surface(
-                modifier = Modifier.fillMaxWidth().clickable { onInvoiceListClick() },
+                modifier = Modifier.fillMaxWidth().clickable { onInvoiceListClick(null) },
                 shape = RoundedCornerShape(16.dp),
                 color = Color.White,
                 border = BorderStroke(1.5.dp, WarmBrown.copy(alpha = 0.4f))
@@ -1756,7 +1824,7 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
         } else {
             items(sortedHistory, key = { it.date }) { h ->
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().clickable { onInvoiceListClick(h.date) },
                     shape = RoundedCornerShape(12.dp),
                     color = Color.White,
                     border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.3f))
@@ -1770,7 +1838,11 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
                                 Text("${h.order_count} đơn hàng", color = Color.Gray, fontSize = 12.sp)
                             }
                         }
-                        Text("${h.revenue.toVndFormat()}đ", fontWeight = FontWeight.ExtraBold, color = WarmBrown, fontSize = 15.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${h.revenue.toVndFormat()}đ", fontWeight = FontWeight.ExtraBold, color = WarmBrown, fontSize = 15.sp)
+                            Spacer(Modifier.width(6.dp))
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = WarmBrown.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
+                        }
                     }
                 }
             }
@@ -2005,6 +2077,7 @@ fun RevenueHistoryChart(data: List<DailyRevenue>) {
 fun AdminInvoiceTodayScreen(
     token: String,
     viewModel: RestaurantViewModel,
+    date: String? = null, // null = hôm nay
     onBack: () -> Unit,
     onOrderClick: (Order) -> Unit
 ) {
@@ -2015,7 +2088,9 @@ fun AdminInvoiceTodayScreen(
     }
 
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-    val todayOrders = remember(orders, today) { orders.filter { it.created_at.startsWith(today) } }
+    val targetDate = date ?: today
+    val isToday = targetDate == today
+    val todayOrders = remember(orders, targetDate) { orders.filter { it.created_at.startsWith(targetDate) } }
     val totalRevenue = remember(todayOrders) { todayOrders.filter { it.payment_status == "paid" }.sumOf { it.total_amount } }
     val paidCount = remember(todayOrders) { todayOrders.count { it.payment_status == "paid" } }
     val unpaidCount = remember(todayOrders) { todayOrders.count { it.payment_status != "paid" } }
@@ -2055,7 +2130,13 @@ fun AdminInvoiceTodayScreen(
                         Spacer(Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text("HOÁ ĐƠN", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, letterSpacing = 2.sp)
-                            Text("Hôm nay · ${todayOrders.size} đơn", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(
+                                if (isToday) "Hôm nay · ${todayOrders.size} đơn"
+                                else "$targetDate · ${todayOrders.size} đơn",
+                                color = Color.White,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 "Doanh thu: ${totalRevenue.toVndFormat()} VNĐ",
@@ -2131,7 +2212,12 @@ fun AdminInvoiceTodayScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.ReceiptLong, null, tint = Color.LightGray, modifier = Modifier.size(64.dp))
                             Spacer(Modifier.height(12.dp))
-                            Text("Hôm nay chưa có hóa đơn nào", color = Color.Gray, fontSize = 15.sp)
+                            Text(
+                                if (isToday) "Hôm nay chưa có hóa đơn nào"
+                                else "Không có hóa đơn trong ngày $targetDate",
+                                color = Color.Gray,
+                                fontSize = 15.sp
+                            )
                         }
                     }
                 }
@@ -2531,6 +2617,7 @@ fun AdminIngredientInventory(
     var ingredientToDelete by remember { mutableStateOf<Ingredient?>(null) }
     var showClearAllConfirm by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var showLowStockOnly by remember { mutableStateOf(false) }
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
@@ -2662,13 +2749,58 @@ fun AdminIngredientInventory(
 
         Spacer(Modifier.height(20.dp))
 
-        val filteredList = if (searchQuery.isBlank()) ingredients else {
-            ingredients.filter { it.name.contains(searchQuery, ignoreCase = true) }
+        // Filter chips
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val lowStockCount = ingredients.count { it.stock < getLowStockThreshold(it.unit) }
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = if (showLowStockOnly) Color(0xFFD9534F) else Color(0xFFF9F9F9),
+                border = BorderStroke(1.dp, if (showLowStockOnly) Color(0xFFD9534F) else Color.LightGray.copy(alpha = 0.4f)),
+                modifier = Modifier.clickable { showLowStockOnly = !showLowStockOnly }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Warning,
+                        null,
+                        tint = if (showLowStockOnly) Color.White else Color(0xFFD9534F),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        "Sắp hết ($lowStockCount)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (showLowStockOnly) Color.White else Color(0xFFD9534F)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        val filteredList = remember(ingredients, searchQuery, showLowStockOnly) {
+            ingredients
+                .filter { if (showLowStockOnly) it.stock < getLowStockThreshold(it.unit) else true }
+                .filter { it.name.contains(searchQuery, ignoreCase = true) }
         }
 
         if (filteredList.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(if (searchQuery.isBlank()) "Kho bếp trống" else "Không tìm thấy nguyên liệu", color = Color.Gray)
+                Text(
+                    when {
+                        showLowStockOnly -> "Không có nguyên liệu nào sắp hết hàng 🎉"
+                        searchQuery.isNotBlank() -> "Không tìm thấy \"$searchQuery\""
+                        else -> "Kho bếp trống"
+                    },
+                    color = Color.Gray
+                )
             }
         } else {
             LazyColumn(
