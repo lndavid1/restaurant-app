@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.restaurant.data.model.*
 import com.example.restaurant.ui.theme.*
+import com.example.restaurant.utils.getLowStockThreshold
 import com.example.restaurant.ui.viewmodel.RestaurantViewModel
 import com.example.restaurant.ui.viewmodel.StockStatus
 import com.example.restaurant.ui.viewmodel.MenuScanViewModel
@@ -1691,8 +1692,35 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
     val allTodayOrders = orders.filter { it.created_at.startsWith(todayStr) }
     val monthRevenue = history.filter { it.date.startsWith(thisMonthStr) }.sumOf { it.revenue }
 
+    val revenueByHour = remember(paidTodayOrders) {
+        val map = mutableMapOf<Int, Double>()
+        paidTodayOrders.forEach { order ->
+            try {
+                // created_at format: yyyy-MM-dd'T'HH:mm:ss
+                val hourStr = order.created_at.substringAfter('T').substringBefore(':')
+                val hour = hourStr.toIntOrNull() ?: 0
+                map[hour] = (map[hour] ?: 0.0) + order.total_amount
+            } catch(e: Exception) {}
+        }
+        map.toSortedMap()
+    }
+
     val sortedHistory = remember(history) { history.sortedByDescending { it.date } }
     val recentHistory = history.sortedBy { it.date }.takeLast(7)
+
+    val topSellingItems = remember(orders) {
+        orders
+            .filter { it.payment_status == "paid" }
+            .flatMap { it.items_detail ?: emptyList() }
+            .groupBy { it.product_id }
+            .map { (id, items) -> 
+                val totalQty = items.sumOf { it.quantity }
+                val name = items.firstOrNull()?.name ?: "Unknown"
+                Triple(id, name, totalQty)
+            }
+            .sortedByDescending { it.third }
+            .take(5)
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -1780,6 +1808,80 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
                     }
                     Spacer(Modifier.height(8.dp))
                     RevenueHistoryChart(recentHistory)
+                }
+            }
+        }
+
+        // --- Doanh thu theo khung giờ (Hôm nay) ---
+        if (revenueByHour.isNotEmpty()) {
+            item {
+                Column {
+                    Text("Doanh thu hôm nay theo khung giờ 🕒", fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(bottom = 12.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White,
+                        border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.3f))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            revenueByHour.forEach { (hour, rev) ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("${hour}h00 - ${hour+1}h00", fontSize = 14.sp, color = Color(0xFF1A1A2E), fontWeight = FontWeight.Medium)
+                                    Text("${rev.toLong().toVndFormat()} đ", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = StatusGreen)
+                                }
+                                if (hour != revenueByHour.lastKey()) {
+                                    HorizontalDivider(color = Color.LightGray.copy(alpha = 0.2f))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Top Món Bán Chạy ---
+        if (topSellingItems.isNotEmpty()) {
+            item {
+                Column {
+                    Text("Top Món Bán Chạy ✨", fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(bottom = 12.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White,
+                        border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.3f))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            topSellingItems.forEachIndexed { index, item ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        Surface(
+                                            shape = CircleShape, 
+                                            color = if (index == 0) Color(0xFFFFD700).copy(alpha = 0.2f) else WarmBrown.copy(alpha = 0.1f),
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text("${index + 1}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (index == 0) Color(0xFFF57F17) else WarmBrown)
+                                            }
+                                        }
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(item.second, fontSize = 14.sp, color = Color(0xFF1A1A2E), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    }
+                                    Text("${item.third} lượt", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = WarmBrown)
+                                }
+                                if (index < topSellingItems.lastIndex) {
+                                    HorizontalDivider(color = Color.LightGray.copy(alpha = 0.2f))
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -2593,17 +2695,6 @@ fun AdminInvoiceDetailScreen(
 // =====================================================
 // TAB 4: QUẢN LÝ KHO NGUYÊN LIỆU (INGREDIENT INVENTORY)
 // =====================================================
-fun getLowStockThreshold(unit: String): Double {
-    return when (unit.lowercase().trim()) {
-        "kg", "kilogram" -> 4.0
-        "lít", "lit", "l" -> 2.0
-        "quả", "qua", "hộp", "hop" -> 20.0
-        "chai" -> 2.0
-        "g", "gram", "gam" -> 4000.0
-        "ml" -> 2000.0
-        else -> 5.0
-    }
-}
 
 @Composable
 fun AdminIngredientInventory(

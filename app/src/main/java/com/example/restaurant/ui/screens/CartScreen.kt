@@ -9,8 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.restaurant.ui.theme.CreamBG
 import com.example.restaurant.ui.theme.StatusGreen
+import com.example.restaurant.ui.theme.StatusRed
 import com.example.restaurant.ui.theme.WarmBrown
 import com.example.restaurant.ui.viewmodel.AuthViewModel
 import com.example.restaurant.ui.viewmodel.RestaurantViewModel
@@ -47,6 +47,27 @@ fun CartScreen(
     val pointsToUse = if (usePoints) minOf(loyaltyPoints, total.toInt()) else 0
     val discountAmount = pointsToUse.toDouble()
     val finalTotal = total - discountAmount
+    var showClearConfirm by remember { mutableStateOf(false) }
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp),
+            title = { Text("Xóa toàn bộ giỏ hàng?", fontWeight = FontWeight.Bold) },
+            text = { Text("Đây sẽ xóa tất cả ${cartItems.size} loại món khỏi giỏ hàng.", color = Color.Gray) },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.clearCart(); showClearConfirm = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusRed),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Xóa tất cả", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("Hủy") }
+            }
+        )
+    }
 
     Scaffold(
         containerColor = CreamBG,
@@ -61,18 +82,24 @@ fun CartScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
                     }
                     Spacer(Modifier.width(4.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text("Giỏ hàng của bạn", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color.White)
                         Text(
                             "${cartItems.size} mon - ${cartItems.sumOf { it.second }} sp",
                             fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f)
                         )
                     }
+                    if (cartItems.isNotEmpty()) {
+                        IconButton(onClick = { showClearConfirm = true }) {
+                            Icon(Icons.Default.DeleteSweep, null, tint = Color.White.copy(alpha = 0.85f))
+                        }
+                    }
                 }
             }
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
+            val cartNotes by viewModel.cartNotes.collectAsState()
 
             if (cartItems.isEmpty()) {
                 // Empty state
@@ -153,6 +180,44 @@ fun CartScreen(
                                         fontSize = 12.sp,
                                         color = Color.Gray
                                     )
+                                    // Note chip
+                                    val currentNote = cartNotes[product.id] ?: ""
+                                    var editingNote by remember { mutableStateOf(false) }
+                                    if (editingNote) {
+                                        OutlinedTextField(
+                                            value = currentNote,
+                                            onValueChange = { viewModel.setCartNote(product.id, it) },
+                                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                                            placeholder = { Text("Ghi chú: không hành, ít đường...", fontSize = 12.sp, color = Color.LightGray) },
+                                            singleLine = true,
+                                            shape = RoundedCornerShape(10.dp),
+                                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                                            trailingIcon = {
+                                                IconButton(onClick = { editingNote = false }, modifier = Modifier.size(20.dp)) {
+                                                    Icon(Icons.Default.Check, null, tint = WarmBrown, modifier = Modifier.size(14.dp))
+                                                }
+                                            },
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = WarmBrown,
+                                                unfocusedBorderColor = Color.LightGray
+                                            )
+                                        )
+                                    } else {
+                                        Row(
+                                            modifier = Modifier.clickable { editingNote = true }.padding(top = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Edit, null, tint = if (currentNote.isNotBlank()) WarmBrown else Color.LightGray, modifier = Modifier.size(13.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(
+                                                if (currentNote.isNotBlank()) currentNote else "Thêm ghi chú...",
+                                                fontSize = 12.sp,
+                                                color = if (currentNote.isNotBlank()) WarmBrown else Color.LightGray,
+                                                fontStyle = if (currentNote.isBlank()) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
                                 }
                                 
                                 Column(horizontalAlignment = Alignment.End) {

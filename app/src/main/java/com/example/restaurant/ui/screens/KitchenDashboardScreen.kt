@@ -40,6 +40,7 @@ import com.example.restaurant.ui.theme.premiumBackground
 import com.example.restaurant.ui.viewmodel.RestaurantViewModel
 import com.example.restaurant.ui.viewmodel.IngredientScanViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.restaurant.utils.getLowStockThreshold
 import com.example.restaurant.utils.toVndFormat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -255,10 +256,14 @@ fun KitchenOrderList(token: String, viewModel: RestaurantViewModel) {
         viewModel.fetchOrders(token)
     }
 
-    val filteredOrders = if (showCompleted) {
-        orders.filter { it.order_status == "completed" }
-    } else {
-        orders.filter { it.order_status != "completed" && it.order_status != "cancelled" }
+    val filteredOrders = remember(orders, showCompleted) {
+        val list = if (showCompleted) {
+            orders.filter { it.order_status == "completed" }
+        } else {
+            orders.filter { it.order_status != "completed" && it.order_status != "cancelled" }
+        }
+        // Sort oldest-first so kitchen processes in order
+        list.sortedBy { it.created_at }
     }
 
     // Dialog xác nhận xóa toàn bộ đơn đã phục vụ
@@ -428,11 +433,26 @@ fun KitchenOrderList(token: String, viewModel: RestaurantViewModel) {
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp
                                     )
-                                    Text(
-                                        order.table_number ?: "Mang về",
-                                        color = androidx.compose.ui.graphics.Color.Gray,
-                                        fontSize = 13.sp
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            order.table_number ?: "Mang về",
+                                            color = androidx.compose.ui.graphics.Color.Gray,
+                                            fontSize = 13.sp
+                                        )
+                                        if (order.created_at.isNotBlank()) {
+                                            Text(" • ", color = androidx.compose.ui.graphics.Color.LightGray, fontSize = 13.sp)
+                                            val timeStr = try {
+                                                val parts = order.created_at.split("T", " ")
+                                                if (parts.size >= 2) parts[1].take(5) else order.created_at.takeLast(5)
+                                            } catch (e: Exception) { "" }
+                                            Text(
+                                                timeStr,
+                                                color = WarmBrown.copy(alpha = 0.7f),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
                                 }
                                 KitchenStatusBadge(order.order_status)
                             }
@@ -445,9 +465,20 @@ fun KitchenOrderList(token: String, viewModel: RestaurantViewModel) {
                             order.items_detail?.forEach { item ->
                                 Row(
                                     Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
                                 ) {
-                                    Text(item.name, fontSize = 14.sp)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(item.name, fontSize = 14.sp)
+                                        if (!item.note.isNullOrBlank()) {
+                                            Text(
+                                                "📝 ${item.note}",
+                                                fontSize = 12.sp,
+                                                color = WarmBrown.copy(alpha = 0.8f),
+                                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                            )
+                                        }
+                                    }
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
                                         color = CreamBG
@@ -654,7 +685,7 @@ fun KitchenIngredientInventory(
         Spacer(Modifier.height(12.dp))
 
         // Filter chip sắp hết hàng
-        val lowCount = ingredients.count { it.stock < 5 }
+        val lowCount = ingredients.count { it.stock < getLowStockThreshold(it.unit) }
         Surface(
             shape = RoundedCornerShape(20.dp),
             color = if (showLowStockOnly) StatusRed else StatusRed.copy(alpha = 0.06f),

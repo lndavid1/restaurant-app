@@ -88,7 +88,8 @@ data class OrderRequest(
 data class OrderItemRequest(
     val product_id: Int = 0,
     val quantity: Int = 1,
-    val price: Double = 0.0
+    val price: Double = 0.0,
+    val note: String? = null
 )
 
 data class OrderItemDetail(
@@ -96,6 +97,7 @@ data class OrderItemDetail(
     val name: String = "",                          // Tên hiển thị trên màn hình bếp
     val quantity: Int = 1,
     val price: Double = 0.0,                        // Đơn giá tại thời điểm đặt hàng (dùng cho hóa đơn)
+    val note: String? = null,                       // Ghi chú riêng cho món (không hành, ít đường...)
     val recipe_snapshot: List<RecipeItem>? = null   // Snapshot recipe tại thời điểm đặt hàng
 )
 

@@ -39,6 +39,16 @@ class RestaurantViewModel : ViewModel() {
     private val _cartItems = MutableStateFlow<List<Pair<Product, Int>>>(emptyList())
     val cartItems: StateFlow<List<Pair<Product, Int>>> = _cartItems
 
+    // Notes for each product in cart: productId -> note
+    private val _cartNotes = MutableStateFlow<Map<Int, String>>(emptyMap())
+    val cartNotes: StateFlow<Map<Int, String>> = _cartNotes
+
+    fun setCartNote(productId: Int, note: String) {
+        _cartNotes.value = _cartNotes.value.toMutableMap().also {
+            if (note.isBlank()) it.remove(productId) else it[productId] = note
+        }
+    }
+
     // Toast/Snackbar messages từ background operations (vd: PayOS polling)
     private val _toastMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val toastMessage: SharedFlow<String> = _toastMessage
@@ -117,7 +127,10 @@ class RestaurantViewModel : ViewModel() {
         _cartItems.value = currentItems
     }
 
-    fun clearCart() { _cartItems.value = emptyList() }
+    fun clearCart() {
+        _cartItems.value = emptyList()
+        _cartNotes.value = emptyMap()
+    }
 
     fun fetchCategories() {
         viewModelScope.launch {
@@ -488,7 +501,8 @@ class RestaurantViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             try {
-                val items = _cartItems.value.map { OrderItemRequest(it.first.id, it.second, it.first.price) }
+                val notes = _cartNotes.value
+                val items = _cartItems.value.map { OrderItemRequest(it.first.id, it.second, it.first.price, notes[it.first.id])  }
                 val total = items.sumOf { it.price * it.quantity }
                 val request = OrderRequest(
                     table_id = tableId, 

@@ -6,6 +6,8 @@ import com.example.restaurant.data.repository.FirebaseAuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.tasks.await
 
 sealed class AuthState {
     object Idle : AuthState()
@@ -55,6 +57,24 @@ class AuthViewModel : ViewModel() {
             val result = repository.getUserProfile(uid)
             result.onSuccess { data ->
                 _userProfile.value = data
+                updateFcmToken(uid)
+            }
+        }
+    }
+
+    private fun updateFcmToken(uid: String) {
+        viewModelScope.launch {
+            try {
+                val token = FirebaseMessaging.getInstance().token.await()
+                if (token.isNotEmpty()) {
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .document(uid)
+                        .update("fcmToken", token)
+                        .await()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }

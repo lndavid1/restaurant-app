@@ -62,6 +62,7 @@ import com.example.restaurant.utils.toVndFormat
 import com.example.restaurant.ui.theme.premiumBackground
 import com.example.restaurant.ui.viewmodel.NotificationViewModel
 import com.example.restaurant.ui.viewmodel.VoucherViewModel
+import com.example.restaurant.ui.viewmodel.ReservationViewModel
 import com.example.restaurant.data.model.Voucher
 
 @OptIn(
@@ -87,8 +88,15 @@ fun CustomerDashboardScreen(
     var homeClickCount by remember { mutableIntStateOf(0) }
     val orders by restaurantViewModel.orders.collectAsState()
     val products by restaurantViewModel.products.collectAsState()
+    val cartItems by restaurantViewModel.cartItems.collectAsState()
     val notificationViewModel: NotificationViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val voucherViewModel: VoucherViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val reservationViewModel: ReservationViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val userReservations by reservationViewModel.userReservations.collectAsState()
+
+    // Badges
+    val activeOrderCount = orders.count { it.order_status == "pending" || it.order_status == "processing" }
+    val pendingReservationCount = userReservations.count { it.status == "pending" }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -99,6 +107,8 @@ fun CustomerDashboardScreen(
         restaurantViewModel.fetchOrders(token)
         restaurantViewModel.fetchInventory()
         notificationViewModel.fetchUserNotifications(token)
+        val userId = authViewModel.userProfile.value?.get("id") as? String ?: ""
+        if (userId.isNotBlank()) reservationViewModel.fetchUserReservations(userId)
     }
 
     LaunchedEffect(restaurantViewModel) {
@@ -185,6 +195,7 @@ fun CustomerDashboardScreen(
                         onNavigateToTakeaway = onNavigateToTakeaway,
                         onNavigateToMyTable = { selectedTab = 1 },
                         onNavigateToReservation = onNavigateToReservation,
+                        pendingReservationCount = pendingReservationCount,
                         onNavigateToChatbot = onNavigateToChatbot,
                         onLogout = onLogout
                     )
@@ -230,13 +241,13 @@ fun CustomerDashboardScreen(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val tabs = listOf(
+                    val navTabDefs = listOf(
                         Triple("Home", Icons.Default.Home, 0),
                         Triple("Thông báo", Icons.Default.Notifications, 1),
                         Triple("Giới thiệu", Icons.Default.Info, 2),
                         Triple("Cài đặt", Icons.Default.Settings, 3)
                     )
-                    tabs.forEach { (label, icon, index) ->
+                    navTabDefs.forEach { (label, icon, index) ->
                         val isSelected = selectedTab == index
                         val scale by androidx.compose.animation.core.animateFloatAsState(
                             targetValue = if (isSelected) 1f else 0.85f,
@@ -263,12 +274,21 @@ fun CustomerDashboardScreen(
                                     .padding(horizontal = 14.dp, vertical = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = label,
-                                    tint = if (isSelected) WarmBrown else Color(0xFFADB5BD),
-                                    modifier = Modifier.size(22.dp)
-                                )
+                                BadgedBox(
+                                    badge = {
+                                        when (index) {
+                                            1 -> if (activeOrderCount > 0) Badge(containerColor = Color(0xFFE53935), contentColor = Color.White) { Text(activeOrderCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Bold) }
+                                            else -> {}
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = label,
+                                        tint = if (isSelected) WarmBrown else Color(0xFFADB5BD),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
                             }
                             Text(
                                 text = label,
@@ -300,6 +320,7 @@ fun HomeTab(
     onNavigateToTakeaway: () -> Unit,
     onNavigateToMyTable: () -> Unit,
     onNavigateToReservation: () -> Unit,
+    pendingReservationCount: Int,
     onNavigateToChatbot: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -698,6 +719,7 @@ fun HomeTab(
                         icon = Icons.Default.EventSeat, 
                         gradientColors = listOf(Color(0xFFF3E5F5), Color(0xFFE1BEE7)),
                         iconTint = Color(0xFF6A1B9A),
+                        badgeCount = pendingReservationCount,
                         onClick = onNavigateToReservation
                     )
                     ActionCircleBtn(
@@ -1165,19 +1187,29 @@ fun HomeTab(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ActionCircleBtn(title: String, icon: ImageVector, onClick: () -> Unit, gradientColors: List<Color>, iconTint: Color) {
+fun ActionCircleBtn(title: String, icon: ImageVector, onClick: () -> Unit, gradientColors: List<Color>, iconTint: Color, badgeCount: Int = 0) {
     val cfg = LocalConfiguration.current
     val btnSize = (cfg.screenWidthDp * 0.17f).dp.coerceIn(54.dp, 76.dp)
     val iconSize = (btnSize.value * 0.44f).dp
     val labelFontSize = if (cfg.screenWidthDp < 380) 11.sp else 12.sp
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(btnSize + 14.dp)) {
-        Surface(
-            modifier = Modifier.size(btnSize).clickable { onClick() },
-            shape = RoundedCornerShape(20.dp),
-            shadowElevation = 6.dp,
-            color = Color.Transparent
+        BadgedBox(
+            badge = {
+                if (badgeCount > 0) {
+                    Badge(containerColor = Color(0xFFE53935), contentColor = Color.White) {
+                        Text(badgeCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         ) {
+            Surface(
+                modifier = Modifier.size(btnSize).clickable { onClick() },
+                shape = RoundedCornerShape(20.dp),
+                shadowElevation = 6.dp,
+                color = Color.Transparent
+            ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1186,6 +1218,7 @@ fun ActionCircleBtn(title: String, icon: ImageVector, onClick: () -> Unit, gradi
             ) {
                 Icon(icon, contentDescription = title, tint = iconTint, modifier = Modifier.size(iconSize))
             }
+        }
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(title, fontSize = labelFontSize, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
