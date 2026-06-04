@@ -49,29 +49,8 @@ class MenuScanViewModel(application: Application) : AndroidViewModel(application
 
 
     // =====================================================
-    // TRIM JSON — tránh crash khi Gemini thêm text thừa
+    // TRIM JSON — không còn cần thiết nếu dùng responseMimeType
     // =====================================================
-    private fun extractJsonArray(raw: String): String {
-        var count = 0
-        var start = -1
-
-        raw.forEachIndexed { i, c ->
-            if (c == '[') {
-                if (count == 0) start = i
-                count++
-            } else if (c == ']') {
-                count--
-                if (count == 0 && start != -1) {
-                    return raw.substring(start, i + 1)
-                }
-            }
-        }
-        return "[]"
-    }
-
-    private fun trimToJson(raw: String): String {
-        return extractJsonArray(raw)
-    }
 
     // =====================================================
     // HEURISTIC MATCHING
@@ -117,8 +96,7 @@ class MenuScanViewModel(application: Application) : AndroidViewModel(application
     // =====================================================
     private fun parseAndValidate(raw: String): List<ScannedMenuItem> {
         return try {
-            val json = trimToJson(raw)
-            val list = Gson().fromJson(json, Array<ScannedMenuItem>::class.java).toList()
+            val list = Gson().fromJson(raw, Array<ScannedMenuItem>::class.java).toList()
             list.map { item ->
                 // Clamp quantity & trust the unit AI picked (which should match inventory)
                 val safeRecipe = item.recipe?.map { r ->
@@ -152,7 +130,7 @@ class MenuScanViewModel(application: Application) : AndroidViewModel(application
             val originalBitmap = BitmapFactory.decodeStream(inputStream)
             inputStream.close()
 
-            val maxDim = 1024  // 1024px đủ để Gemini đọc text menu
+            val maxDim = 1024  // Trả về 1024px để đảm bảo AI đọc rõ giá tiền (các chữ số nhỏ)
             val scale = minOf(
                 maxDim.toFloat() / originalBitmap.width,
                 maxDim.toFloat() / originalBitmap.height,
@@ -279,13 +257,13 @@ class MenuScanViewModel(application: Application) : AndroidViewModel(application
     // =====================================================
     // SCAN MENU — Core function
     // =====================================================
-    fun scanMenuImage(uri: Uri, existingProducts: List<Product>, existingCategories: List<Category>, existingIngredients: List<Ingredient>, context: Context) {
+    fun scanMenuImages(uris: List<Uri>, existingProducts: List<Product>, existingCategories: List<Category>, existingIngredients: List<Ingredient>, context: Context) {
         viewModelScope.launch {
             _scanState.value = ScanState.Loading("Đang chuẩn bị ảnh... 🖼️")
             var loadingJob: kotlinx.coroutines.Job? = null
             try {
-                val bitmap = resizeBitmapForAI(uri, context)
-                    ?: throw Exception("Không thể đọc ảnh. Vui lòng thử lại.")
+                val bitmaps = uris.mapNotNull { resizeBitmapForAI(it, context) }
+                if (bitmaps.isEmpty()) throw Exception("Không thể đọc ảnh. Vui lòng thử lại.")
                 
                 loadingJob = launch {
                     val messages = listOf(
@@ -306,7 +284,10 @@ class MenuScanViewModel(application: Application) : AndroidViewModel(application
 
                 val model = Firebase.ai(backend = GenerativeBackend.vertexAI()).generativeModel(
                     modelName = "gemini-2.5-flash",
-                    generationConfig = generationConfig { temperature = 0.1f }
+                    generationConfig = generationConfig { 
+                        temperature = 0.1f
+                        responseMimeType = "application/json"
+                    }
                 )
 
                 val prompt = """
@@ -339,13 +320,16 @@ Format bắt buộc:
 Quy tắc:
 - name: tên đầy đủ tiếng Việt.
 - search_keyword: Tiếng Anh ngắn gọn mô tả thực thể (VD: "Pork ribs", "Orange juice").
-- price: VNĐ. Nếu không có -> 0.
-- category: Dùng danh mục có sẵn hoặc tạo mới ngắn gọn.
+- price: BẮT BUỘC TÌM VÀ ĐỌC GIÁ TIỀN CỦA TỪNG MÓN TRONG ẢNH (VNĐ). Nếu menu thật sự không có giá -> 0.
+- category: Phân loại món ăn thật thông minh. Bắt buộc nhóm vào các danh mục như: "Món chính", "Đồ ăn vặt", "Đồ uống", "Tráng miệng", "Combo"... dựa vào tên món. NẾU KHÔNG có danh mục phù hợp trong "Danh mục hiện có", hãy tự tạo danh mục chuẩn xác nhất theo các nhóm trên.
 - recipe: CỰC KỲ QUAN TRỌNG. Chỉ được dùng thông tin từ Danh sách Kho. KHÔNG tự chế ingredient_id không có trong kho. Nếu không có cái nào phù hợp, để rỗng []. Đơn vị `unit` PHẢI GIỮ NGUYÊN giống hệt `unit` của nguyên liệu trong kho. Tuyệt đối không tự ý đổi đơn vị. Tự suy tính `quantity` sao cho phù hợp với đơn vị gốc đó (VD: kho tính bằng 'lít' mà 1 ly cần 100ml thì quantity là 0.1).
                 """.trimIndent()
 
                 val response = withTimeout(120000) {
-                    model.generateContent(content { image(bitmap); text(prompt) })
+                    model.generateContent(content { 
+                        bitmaps.forEach { image(it) }
+                        text(prompt) 
+                    })
                 }
 
                 val raw = response.text ?: "[]"
@@ -358,29 +342,33 @@ Quy tắc:
                     return@launch
                 }
 
-                // Cập nhật text UI
                 loadingJob.cancel()
-                val completedCount = java.util.concurrent.atomic.AtomicInteger(0)
                 
-                loadingJob = launch {
-                    while(true) {
-                        _scanState.value = ScanState.Loading("Đang fetch ảnh tự động... 🖼️ (${completedCount.get()}/${deduplicated.size})")
-                        delay(500)  // 500ms đủ mượt, tránh spam UI thread
-                    }
+                // --- PROGRESSIVE RENDER (LAZY LOADING HÌNH ẢNH) ---
+                // 1. Khởi tạo danh sách ban đầu CHƯA CÓ hình ảnh để hiển thị UI ngay lập tức
+                val initialItems = deduplicated.map { item ->
+                    val isDup = existingProducts.any { isSimilar(it.name ?: "", item.name) }
+                    item.copy(isPossibleDuplicate = isDup)
                 }
+                
+                // Hiển thị UI lập tức
+                _scanState.value = ScanState.Success(initialItems)
 
-                // B5: Tải ảnh song song
-                val finalItems = deduplicated.map { item ->
-                    async {
-                        val isDup = existingProducts.any { isSimilar(it.name ?: "", item.name) }
-                        val imgUrl = fetchImageForKeyword(item.search_keyword, item.category)
-                        val result = item.copy(isPossibleDuplicate = isDup, image_url = imgUrl)
-                        completedCount.incrementAndGet()
-                        result
+                // 2. Tải hình ảnh ngầm và cập nhật dần
+                launch {
+                    val currentList = initialItems.toMutableList()
+                    val jobs = currentList.mapIndexed { index, item ->
+                        async {
+                            val imgUrl = fetchImageForKeyword(item.search_keyword, item.category)
+                            if (imgUrl != null) {
+                                currentList[index] = currentList[index].copy(image_url = imgUrl)
+                                // Trigger recomposition bằng danh sách copy mới
+                                _scanState.value = ScanState.Success(currentList.toList())
+                            }
+                        }
                     }
-                }.awaitAll()
-
-                _scanState.value = ScanState.Success(finalItems)
+                    jobs.awaitAll()
+                }
 
             } catch (e: Exception) {
                 android.util.Log.e("MenuScan", "Lỗi scan: ${e.message}")

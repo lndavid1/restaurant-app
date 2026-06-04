@@ -58,8 +58,11 @@ fun TableMapScreen(
 ) {
     val tables by viewModel.tables.collectAsState()
     val orders by viewModel.orders.collectAsState()
+    val reservationViewModel: com.example.restaurant.ui.viewmodel.ReservationViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val allReservations by reservationViewModel.allReservations.collectAsState()
 
     var showActionDialog by remember { mutableStateOf(false) }
+    var showReservedDialog by remember { mutableStateOf(false) }
     var selectedTable by remember { mutableStateOf<RestaurantTable?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) }
     var showServiceDialog by remember { mutableStateOf(false) }
@@ -72,6 +75,7 @@ fun TableMapScreen(
     LaunchedEffect(Unit) {
         viewModel.fetchTables(token)
         viewModel.fetchOrders(token)
+        reservationViewModel.fetchAllReservations()
     }
 
     // Lắng nghe sự kiện thanh toán thành công TỰ ĐỘNG cho MỌI ĐƠN HÀNG (realtime từ Firestore)
@@ -82,7 +86,7 @@ fun TableMapScreen(
 
         newlyPaid.forEach { paidId ->
             com.example.restaurant.utils.SoundManager.playSuccessSound(ctx)
-            android.widget.Toast.makeText(ctx, "✅ Đơn #$paidId đã được thanh toán qua Cloud thành công!", android.widget.Toast.LENGTH_LONG).show()
+            AppToast.success("✅ Đơn #$paidId đã được thanh toán qua Cloud thành công!")
 
             // Xoá URL thanh toán khỏi order và tự động giải phóng bàn
             viewModel.clearVnpayUrl(paidId)
@@ -251,6 +255,46 @@ fun TableMapScreen(
         }
     }
 
+    if (showReservedDialog && selectedTable != null) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showReservedDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                modifier = Modifier.fillMaxWidth().padding(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.EventSeat, null, modifier = Modifier.size(48.dp), tint = com.example.restaurant.ui.theme.StatusYellow)
+                    Spacer(Modifier.height(16.dp))
+                    Text("${selectedTable!!.table_number} đã được đặt trước", fontWeight = FontWeight.Bold, fontSize = 18.sp, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(8.dp))
+                    if (selectedTable!!.reserved_time != null) {
+                        Text("Thời gian đặt: ${selectedTable!!.reserved_time}", fontSize = 14.sp, color = Color.Gray)
+                    }
+                    Spacer(Modifier.height(24.dp))
+                    Button(
+                        onClick = {
+                            val res = allReservations.find { it.table_id == selectedTable!!.id && it.status == "confirmed" }
+                            if (res != null) {
+                                reservationViewModel.updateStatus(res.id, "completed")
+                            }
+                            viewModel.updateTableAdmin(selectedTable!!.copy(status = "occupied", reserved_time = null))
+                            onTableSelected(selectedTable!!.id, selectedTable!!.table_number)
+                            showReservedDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = WarmBrown),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Khách đã đến (Gọi món)", fontWeight = FontWeight.Bold) }
+                    
+                    Spacer(Modifier.height(12.dp))
+                    TextButton(onClick = { showReservedDialog = false }) {
+                        Text("Đóng", color = Color.Gray)
+                    }
+                }
+            }
+        }
+    }
+
     // Dialog đặc biệt khi bàn đang gọi phục vụ
     if (showServiceDialog && selectedTable != null) {
         AlertDialog(
@@ -360,7 +404,7 @@ fun TableMapScreen(
         val newlyReq = currentReqIds - viewModel.knownReqIds
         
         if (newlyReq.isNotEmpty()) {
-            android.widget.Toast.makeText(context, "🔔 Nhận được yêu cầu thanh toán mới!", android.widget.Toast.LENGTH_LONG).show()
+            AppToast.info("🔔 Nhận được yêu cầu thanh toán mới!")
             com.example.restaurant.utils.SoundManager.playPaymentRequestSound(context)
         }
         viewModel.markReqIdsAsSeen(newlyReq)
@@ -371,7 +415,7 @@ fun TableMapScreen(
         val newlyCalling = currentCalling - viewModel.knownCallingIds
         
         if (newlyCalling.isNotEmpty()) {
-            android.widget.Toast.makeText(context, "🔔 Khách đang gọi phục vụ!", android.widget.Toast.LENGTH_LONG).show()
+            AppToast.warning("🔔 Khách đang gọi phục vụ!")
             com.example.restaurant.utils.SoundManager.playCallStaffSound(context)
         }
         viewModel.markCallingIdsAsSeen(newlyCalling)
@@ -379,7 +423,7 @@ fun TableMapScreen(
     
     LaunchedEffect(viewModel) {
         viewModel.toastMessage.collect { message ->
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+            AppToast.info(message)
         }
     }
 
@@ -406,6 +450,8 @@ fun TableMapScreen(
                             selectedTable = table
                             if (table.needs_service) {
                                 showServiceDialog = true // ưu tiên hiện dialog phục vụ trước
+                            } else if (table.status == "reserved") {
+                                showReservedDialog = true
                             } else {
                                 showActionDialog = true
                             }
@@ -423,7 +469,6 @@ fun TableMapScreen(
                         }
                     )
                     2 -> {
-                        val reservationViewModel: com.example.restaurant.ui.viewmodel.ReservationViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
                         com.example.restaurant.ui.screens.ReservationManagementScreen(
                             reservationViewModel = reservationViewModel,
                             restaurantViewModel = viewModel,
@@ -659,7 +704,7 @@ fun EmployeeTableMapTab(
                         table = table,
                         orders = orders,
                         onClick = {
-                            if (table.status == "occupied" || table.needs_service) {
+                            if (table.status == "occupied" || table.needs_service || table.status == "reserved") {
                                 onShowDialog(table)
                             } else {
                                 onTableSelected(table.id, table.table_number)
@@ -1265,7 +1310,13 @@ fun CustomerTableMapLayout(
 @Composable
 fun CustomerTableCardView(table: RestaurantTable, orders: List<Order>, onClick: () -> Unit) {
     val isAvailable = table.status == "available"
-    val statusColor = if (isAvailable) StatusGreen else StatusRed
+    val isReserved = table.status == "reserved"
+    
+    val statusColor = when {
+        isAvailable -> StatusGreen
+        isReserved -> StatusYellow
+        else -> StatusRed
+    }
     val bgColor = if (isAvailable) Color.White else Color(0xFFF9F9F9)
     val textColor = if (isAvailable) Color(0xFF1A1A2E) else Color.Gray
     
@@ -1311,8 +1362,19 @@ fun CustomerTableCardView(table: RestaurantTable, orders: List<Order>, onClick: 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("${table.capacity} Khách", fontSize = 13.sp, color = Color.Gray)
-                Text(if (isAvailable) "Thêm" else "Đang dùng", fontSize = 12.sp, color = statusColor, fontWeight = FontWeight.Bold)
+                Column {
+                    Text("${table.capacity} Khách", fontSize = 13.sp, color = Color.Gray)
+                    if (isReserved && table.reserved_time != null) {
+                        Text(table.reserved_time, fontSize = 11.sp, color = StatusYellow, fontWeight = FontWeight.Medium)
+                    }
+                }
+                
+                val statusText = when {
+                    isAvailable -> "Thêm"
+                    isReserved -> "Đã đặt"
+                    else -> "Đang dùng"
+                }
+                Text(statusText, fontSize = 12.sp, color = statusColor, fontWeight = FontWeight.Bold)
             }
         }
     }

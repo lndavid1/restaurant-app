@@ -22,8 +22,13 @@ class FirebaseAuthRepository {
             } else {
                 Result.failure(Exception("Đăng nhập thất bại: Không tìm thấy User"))
             }
+        } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
+            Result.failure(Exception("Sai tài khoản hoặc mật khẩu."))
+        } catch (e: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) {
+            Result.failure(Exception("Sai tài khoản hoặc mật khẩu."))
         } catch (e: Exception) {
-            Result.failure(Exception("Lỗi đăng nhập: ${e.localizedMessage}"))
+            val msg = e.localizedMessage ?: ""
+            Result.failure(Exception("Lỗi đăng nhập: $msg"))
         }
     }
 
@@ -175,7 +180,7 @@ class FirebaseAuthRepository {
         }
     }
 
-    suspend fun verifyOTPAndChangePassword(uid: String, inputOtp: String, newPass: String): Result<Boolean> {
+    suspend fun verifyOTPAndChangePassword(uid: String, inputOtp: String, currentPass: String, newPass: String): Result<Boolean> {
         return try {
             val document = firestore.collection("users").document(uid).get().await()
             val email = document.getString("email") ?: ""
@@ -220,23 +225,36 @@ class FirebaseAuthRepository {
                 }
             }
 
+            // OTP hợp lệ — xóa OTP trước
             otpRef.delete().await()
 
             val currentUser = auth.currentUser
-            if (currentUser != null && currentUser.uid == uid) {
+                ?: return Result.failure(Exception("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."))
+
+            if (currentUser.uid != uid) {
+                return Result.failure(Exception("Tài khoản không khớp."))
+            }
+
+            // Re-authenticate đúng cách bằng EmailAuthProvider — bắt buộc để đổi mật khẩu
+            try {
+                val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(email, currentPass)
+                currentUser.reauthenticate(credential).await()
                 currentUser.updatePassword(newPass).await()
-            } else {
-                return Result.failure(Exception("Chưa đăng nhập đúng tài khoản."))
+            } catch (reAuthEx: Exception) {
+                val reMsg = reAuthEx.localizedMessage ?: ""
+                return when {
+                    reMsg.contains("INVALID_PASSWORD") || reMsg.contains("wrong-password") || reMsg.contains("invalid-credential") ->
+                        Result.failure(Exception("Mật khẩu hiện tại không đúng. Vui lòng kiểm tra lại."))
+                    reMsg.contains("too-many-requests") ->
+                        Result.failure(Exception("Quá nhiều lần thử. Vui lòng thử lại sau ít phút."))
+                    else ->
+                        Result.failure(Exception("Lỗi xác thực: $reMsg"))
+                }
             }
 
             Result.success(true)
         } catch (e: Exception) {
-            val msg = e.localizedMessage ?: ""
-            if (msg.contains("CREDENTIAL_TOO_OLD_LOGIN_AGAIN")) {
-                Result.failure(Exception("Phiên đăng nhập đã quá cũ. Vui lòng đăng xuất và đăng nhập lại để đổi mật khẩu."))
-            } else {
-                Result.failure(Exception("Lỗi vô hiệu: $msg"))
-            }
+            Result.failure(Exception("Lỗi đổi mật khẩu: ${e.localizedMessage}"))
         }
     }
 

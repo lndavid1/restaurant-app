@@ -73,7 +73,8 @@ data class RestaurantTable(
     val table_number: String = "",
     val capacity: Int = 4,
     val status: String = "available",
-    val needs_service: Boolean = false
+    val needs_service: Boolean = false,
+    val reserved_time: String? = null
 )
 
 data class OrderRequest(

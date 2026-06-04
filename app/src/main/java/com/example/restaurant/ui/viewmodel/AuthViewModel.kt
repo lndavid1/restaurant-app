@@ -120,10 +120,10 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    fun verifyOTPAndChangePassword(uid: String, inputOtp: String, newPass: String) {
+    fun verifyOTPAndChangePassword(uid: String, inputOtp: String, currentPass: String, newPass: String) {
         viewModelScope.launch {
             _changePasswordState.value = AuthState.Loading
-            val result = repository.verifyOTPAndChangePassword(uid, inputOtp, newPass)
+            val result = repository.verifyOTPAndChangePassword(uid, inputOtp, currentPass, newPass)
             result.onSuccess {
                 _changePasswordState.value = AuthState.Success(uid, "password_changed")
             }.onFailure { e ->

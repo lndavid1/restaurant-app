@@ -59,7 +59,7 @@ fun KitchenDashboardScreen(
     // collectLatest trong LaunchedEffect đã lifecycle-safe (tied to Composition)
     LaunchedEffect(Unit) {
         viewModel.toastMessage.collectLatest { message ->
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            AppToast.info(message)
         }
     }
 
@@ -73,8 +73,8 @@ fun KitchenDashboardScreen(
             scanViewModel = ingredientScanViewModel,
             restaurantViewModel = viewModel,
             onBack = { showIngredientScanResult = false; viewModel.fetchInventory() },
-            onScanAgain = { uri ->
-                ingredientScanViewModel.scanIngredientImage(uri, viewModel.ingredients.value, context)
+            onScanAgain = { uris ->
+                ingredientScanViewModel.scanIngredientImages(uris, viewModel.ingredients.value, context)
             }
         )
         return
@@ -183,8 +183,8 @@ fun KitchenDashboardScreen(
                     }
                     1 -> KitchenIngredientInventory(
                              viewModel = viewModel,
-                             onScanClick = { uri ->
-                                 ingredientScanViewModel.scanIngredientImage(uri, viewModel.ingredients.value, context)
+                             onScanClick = { uris ->
+                                 ingredientScanViewModel.scanIngredientImages(uris, viewModel.ingredients.value, context)
                                  showIngredientScanResult = true
                              }
                          )
@@ -576,7 +576,7 @@ fun KitchenStatusBadge(status: String) {
 @Composable
 fun KitchenIngredientInventory(
     viewModel: RestaurantViewModel,
-    onScanClick: (Uri) -> Unit
+    onScanClick: (List<Uri>) -> Unit
 ) {
     val ingredients by viewModel.ingredients.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
@@ -586,8 +586,8 @@ fun KitchenIngredientInventory(
     var showLowStockOnly by remember { mutableStateOf(false) }
 
     val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> if (uri != null) onScanClick(uri) }
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> -> if (uris.isNotEmpty()) onScanClick(uris) }
 
     LaunchedEffect(Unit) {
         viewModel.fetchInventory()

@@ -90,7 +90,7 @@ fun AdminDashboardScreen(
     // collectLatest trong LaunchedEffect đã lifecycle-safe (tied to Composition)
     LaunchedEffect(Unit) {
         viewModel.toastMessage.collectLatest { message ->
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            AppToast.info(message)
         }
     }
 
@@ -134,8 +134,25 @@ fun AdminDashboardScreen(
             scanViewModel = ingredientScanViewModel,
             restaurantViewModel = viewModel,
             onBack = { showIngredientScanResult = false; viewModel.fetchInventory() },
-            onScanAgain = { uri ->
-                ingredientScanViewModel.scanIngredientImage(uri, viewModel.ingredients.value, context)
+            onScanAgain = { uris ->
+                ingredientScanViewModel.scanIngredientImages(uris, viewModel.ingredients.value, context)
+            }
+        )
+        return
+    }
+
+    // MenuScan state
+    val menuScanViewModel: MenuScanViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    var showMenuScanResult by remember { mutableStateOf(false) }
+
+    if (showMenuScanResult) {
+        MenuScanResultScreen(
+            scanViewModel = menuScanViewModel,
+            restaurantViewModel = viewModel,
+            adminToken = token,
+            onBack = { showMenuScanResult = false; viewModel.fetchProducts() },
+            onScanAgain = { uris ->
+                menuScanViewModel.scanMenuImages(uris, viewModel.products.value, viewModel.categories.value, viewModel.ingredients.value, context)
             }
         )
         return
@@ -223,7 +240,14 @@ fun AdminDashboardScreen(
                         AdminMainHome(token, viewModel, modifier = Modifier.weight(1f))
                     }
                     1 -> AdminTableManager(token, viewModel)
-                    2 -> AdminProductInventory(token, viewModel)
+                    2 -> AdminProductInventory(
+                             token = token,
+                             viewModel = viewModel,
+                             onScanClick = { uris ->
+                                 menuScanViewModel.scanMenuImages(uris, viewModel.products.value, viewModel.categories.value, viewModel.ingredients.value, context)
+                                 showMenuScanResult = true
+                             }
+                         )
                     3 -> AdminStatsView(token, viewModel, onInvoiceListClick = { date ->
                         selectedInvoiceDate = date
                         showInvoiceList = true
@@ -231,8 +255,8 @@ fun AdminDashboardScreen(
                     4 -> AdminIngredientInventory(
                              token = token,
                              viewModel = viewModel,
-                             onScanClick = { uri ->
-                                 ingredientScanViewModel.scanIngredientImage(uri, viewModel.ingredients.value, context)
+                             onScanClick = { uris ->
+                                 ingredientScanViewModel.scanIngredientImages(uris, viewModel.ingredients.value, context)
                                  showIngredientScanResult = true
                              }
                          )
@@ -618,7 +642,7 @@ fun TableEditDialog(table: RestaurantTable?, onDismiss: () -> Unit, onConfirm: (
 // TAB 2: Thức ăn - theo menu sketch 2
 // =====================================================
 @Composable
-fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
+fun AdminProductInventory(token: String, viewModel: RestaurantViewModel, onScanClick: (List<Uri>) -> Unit) {
     val context = LocalContext.current
     val products by viewModel.products.collectAsState()
     val categories by viewModel.categories.collectAsState()
@@ -634,32 +658,12 @@ fun AdminProductInventory(token: String, viewModel: RestaurantViewModel) {
     var showLowStockOnly by remember { mutableStateOf(false) }
     var showNoRecipeOnly by remember { mutableStateOf(false) }
 
-    // MenuScan state
-    val scanViewModel: MenuScanViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
-    val scanState by scanViewModel.scanState.collectAsState()
-    var showScanResult by remember { mutableStateOf(false) }
-
-    // Nếu đang hiển thị kết quả quét
-    if (showScanResult) {
-        MenuScanResultScreen(
-            scanViewModel = scanViewModel,
-            restaurantViewModel = viewModel,
-            adminToken = token,
-            onBack = { showScanResult = false; viewModel.fetchProducts() },
-            onScanAgain = { uri ->
-                scanViewModel.scanMenuImage(uri, products, categories, ingredients, context)
-            }
-        )
-        return
-    }
-
     // Launcher chọn ảnh menu để quét
     val menuImagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            showScanResult = true
-            scanViewModel.scanMenuImage(uri, products, categories, ingredients, context)
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            onScanClick(uris)
         }
     }
 
@@ -1524,7 +1528,7 @@ fun ProductEditDialog(
                             if (uploadedUrl != null) {
                                 finalImageUrl = uploadedUrl
                             } else {
-                                Toast.makeText(context, "Upload ảnh thất bại", Toast.LENGTH_SHORT).show()
+                                AppToast.error("Upload ảnh thất bại")
                                 isUploading = false
                                 return@launch
                             }
@@ -1672,10 +1676,10 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
                     outputStream.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
                     outputStream.write(csvContent.toByteArray(Charsets.UTF_8))
                 }
-                android.widget.Toast.makeText(context, "Xuất CSV thành công!", android.widget.Toast.LENGTH_SHORT).show()
+                AppToast.success("Xuất CSV thành công!")
             } catch (e: Exception) {
                 e.printStackTrace()
-                android.widget.Toast.makeText(context, "Lỗi khi xuất CSV", android.widget.Toast.LENGTH_SHORT).show()
+                AppToast.error("Lỗi khi xuất CSV")
             }
         }
     }
@@ -1696,8 +1700,9 @@ fun AdminStatsView(token: String, viewModel: RestaurantViewModel, onInvoiceListC
         val map = mutableMapOf<Int, Double>()
         paidTodayOrders.forEach { order ->
             try {
-                // created_at format: yyyy-MM-dd'T'HH:mm:ss
-                val hourStr = order.created_at.substringAfter('T').substringBefore(':')
+                // created_at format might be yyyy-MM-dd HH:mm:ss or yyyy-MM-dd'T'HH:mm:ss
+                val timePart = order.created_at.substringAfter(' ').substringAfter('T')
+                val hourStr = timePart.substringBefore(':')
                 val hour = hourStr.toIntOrNull() ?: 0
                 map[hour] = (map[hour] ?: 0.0) + order.total_amount
             } catch(e: Exception) {}
@@ -2700,7 +2705,7 @@ fun AdminInvoiceDetailScreen(
 fun AdminIngredientInventory(
     token: String,
     viewModel: RestaurantViewModel,
-    onScanClick: (Uri) -> Unit
+    onScanClick: (List<Uri>) -> Unit
 ) {
     val ingredients by viewModel.ingredients.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
@@ -2711,8 +2716,8 @@ fun AdminIngredientInventory(
     var showLowStockOnly by remember { mutableStateOf(false) }
 
     val imagePicker = rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> if (uri != null) onScanClick(uri) }
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> -> if (uris.isNotEmpty()) onScanClick(uris) }
 
     LaunchedEffect(Unit) {
         viewModel.fetchInventory()

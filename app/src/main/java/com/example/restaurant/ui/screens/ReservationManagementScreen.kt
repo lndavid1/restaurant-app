@@ -150,11 +150,31 @@ fun ReservationManagementScreen(
                             reservation = reservation, 
                             viewModel = reservationViewModel,
                             onCustomerArrived = {
-                                selectedReservationForTable = reservation
-                                showTableDialog = true
+                                if (reservation.table_id != null) {
+                                    restaurantViewModel.assignTableToCustomer(
+                                        customerId = reservation.user_id,
+                                        tableId = reservation.table_id,
+                                        onComplete = {
+                                            reservationViewModel.updateStatus(reservation.id, "completed")
+                                        }
+                                    )
+                                } else {
+                                    selectedReservationForTable = reservation
+                                    showTableDialog = true
+                                }
                             },
                             onStatusChange = { newStatus ->
                                 reservationViewModel.updateStatus(reservation.id, newStatus)
+                                if (reservation.table_id != null) {
+                                    val table = tables.find { it.id == reservation.table_id }
+                                    if (table != null) {
+                                        if (newStatus == "confirmed") {
+                                            restaurantViewModel.updateTableAdmin(table.copy(status = "reserved", reserved_time = "${reservation.time} - ${reservation.date}"))
+                                        } else if (newStatus == "cancelled") {
+                                            restaurantViewModel.updateTableAdmin(table.copy(status = "available", reserved_time = null))
+                                        }
+                                    }
+                                }
                                 val msg = if (newStatus == "confirmed") "Đơn đặt bàn của bạn đã được xác nhận!" else "Đơn đặt bàn của bạn đã bị từ chối."
                                 val type = if (newStatus == "confirmed") "success" else "warning"
                                 notificationViewModel.sendNotification(reservation.user_id, "Cập nhật đặt bàn", msg, type)
@@ -268,6 +288,14 @@ fun AdminReservationCard(
                         Spacer(Modifier.width(4.dp))
                         Text("${reservation.guest_count} khách", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = WarmBrown)
                     }
+                }
+            }
+            if (reservation.table_number != null) {
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.EventSeat, null, modifier = Modifier.size(16.dp), tint = WarmBrown)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Bàn đã chọn: ${reservation.table_number}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.DarkGray)
                 }
             }
 

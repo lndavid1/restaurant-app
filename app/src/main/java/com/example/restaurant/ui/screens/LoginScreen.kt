@@ -167,7 +167,11 @@ fun LoginScreen(
                     Spacer(Modifier.height(16.dp))
 
                     Button(
-                        onClick = { 
+                        onClick = {
+                            if (email.isBlank() || password.isBlank()) {
+                                AppToast.warning("Vui lòng nhập đầy đủ Email và Mật khẩu")
+                                return@Button
+                            }
                             if (rememberMe) {
                                 sharedPref.edit()
                                     .putBoolean("rememberMe", true)
@@ -191,17 +195,7 @@ fun LoginScreen(
                         }
                     }
 
-                    if (authState is AuthState.Error) {
-                        Spacer(Modifier.height(12.dp))
-                        Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFFFEBEE)) {
-                            Text(
-                                text = (authState as AuthState.Error).message,
-                                color = Color(0xFFD32F2F),
-                                modifier = Modifier.padding(12.dp),
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
+
                 }
             }
 
@@ -243,9 +237,16 @@ fun LoginScreen(
     }
 
     LaunchedEffect(authState) {
-        if (authState is AuthState.Success) {
-            val successState = authState as AuthState.Success
-            onLoginSuccess(successState.token, successState.role)
+        when (authState) {
+            is AuthState.Success -> {
+                val successState = authState as AuthState.Success
+                AppToast.success("Đăng nhập thành công!")
+                onLoginSuccess(successState.token, successState.role)
+            }
+            is AuthState.Error -> {
+                AppToast.error((authState as AuthState.Error).message)
+            }
+            else -> {}
         }
     }
 }

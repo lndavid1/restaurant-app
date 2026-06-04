@@ -1,6 +1,7 @@
 package com.example.restaurant.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -33,6 +35,7 @@ import com.example.restaurant.ui.theme.CreamBG
 import com.example.restaurant.ui.theme.WarmBrown
 import com.example.restaurant.ui.viewmodel.AuthViewModel
 import com.example.restaurant.ui.viewmodel.ReservationViewModel
+import com.example.restaurant.ui.viewmodel.RestaurantViewModel
 import kotlinx.coroutines.flow.collectLatest
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -45,6 +48,7 @@ fun ReservationScreen(
     token: String,
     authViewModel: AuthViewModel,
     reservationViewModel: ReservationViewModel,
+    restaurantViewModel: RestaurantViewModel,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -71,13 +75,19 @@ fun ReservationScreen(
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedDateMillis)
     val timePickerState = rememberTimePickerState(initialHour = selectedHour, initialMinute = selectedMinute)
 
+    var selectedTableId by remember { mutableStateOf<Int?>(null) }
+    var selectedTableNumber by remember { mutableStateOf<String?>(null) }
+    var showTableDropdown by remember { mutableStateOf(false) }
+
     val userReservations by reservationViewModel.userReservations.collectAsState()
+    val tables by restaurantViewModel.tables.collectAsState()
 
     LaunchedEffect(Unit) {
         if (userProfile == null) {
             authViewModel.loadUserProfile(token)
         }
         reservationViewModel.fetchUserReservations(token)
+        restaurantViewModel.fetchInventory()
     }
 
     val activeReservation = remember(userReservations) {
@@ -86,7 +96,7 @@ fun ReservationScreen(
 
     LaunchedEffect(Unit) {
         reservationViewModel.toastMessage.collectLatest { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            AppToast.info(msg)
         }
     }
 
@@ -118,7 +128,7 @@ fun ReservationScreen(
                         Button(
                             onClick = {
                                 if (userName.isBlank() || userPhone.isBlank() || selectedDateMillis == null) {
-                                    Toast.makeText(context, "Vui lòng nhập đủ thông tin bắt buộc", Toast.LENGTH_SHORT).show()
+                                    AppToast.warning("Vui lòng nhập đủ thông tin bắt buộc")
                                     return@Button
                                 }
                                 
@@ -133,7 +143,9 @@ fun ReservationScreen(
                                     date = dateStr,
                                     time = timeStr,
                                     guest_count = guestCount,
-                                    note = note
+                                    note = note,
+                                    table_id = selectedTableId,
+                                    table_number = selectedTableNumber
                                 )
                                 reservationViewModel.createReservation(reservation) {
                                     onNavigateBack()
@@ -300,6 +312,99 @@ fun ReservationScreen(
                                     onClick = { if (guestCount < 20) guestCount++ },
                                     modifier = Modifier.size(36.dp).background(WarmBrown.copy(alpha=0.1f), CircleShape)
                                 ) { Icon(Icons.Default.Add, "Tăng", tint = WarmBrown) }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- CHỌN BÀN (TÙY CHỌN) ---
+            item {
+                Text("Chọn bàn (Tùy chọn)", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Gray)
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        OutlinedButton(
+                            onClick = { 
+                                selectedTableId = null
+                                selectedTableNumber = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (selectedTableId == null) WarmBrown else Color.Gray,
+                                containerColor = if (selectedTableId == null) WarmBrown.copy(alpha=0.1f) else Color.Transparent
+                            ),
+                            border = BorderStroke(1.dp, if (selectedTableId == null) WarmBrown else Color.LightGray)
+                        ) {
+                            Icon(Icons.Default.EventSeat, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Cho phép nhà hàng sắp xếp")
+                        }
+                        
+                        Spacer(Modifier.height(16.dp))
+                        
+                        val sortedTables = tables.sortedWith(compareBy({ it.table_number.filter { c -> c.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }, { it.table_number }))
+                        val chunkedTables = sortedTables.chunked(3)
+                        
+                        chunkedTables.forEach { rowTables ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), 
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                rowTables.forEach { table ->
+                                    val isAvailable = table.status == "available"
+                                    val isReserved = table.status == "reserved"
+                                    val isSelected = selectedTableId == table.id
+                                    
+                                    val statusColor = when {
+                                        isSelected -> WarmBrown
+                                        isAvailable -> com.example.restaurant.ui.theme.StatusGreen
+                                        isReserved -> com.example.restaurant.ui.theme.StatusYellow
+                                        else -> com.example.restaurant.ui.theme.StatusRed
+                                    }
+                                    val bgColor = if (isSelected) WarmBrown.copy(alpha=0.1f) else Color(0xFFF9F9F9)
+                                    val alphaVal = if (isAvailable) 1f else 0.6f
+                                    
+                                    Surface(
+                                        modifier = Modifier.weight(1f).height(90.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = bgColor,
+                                        border = BorderStroke(if (isSelected) 2.dp else 1.dp, statusColor.copy(alpha=0.5f)),
+                                        onClick = {
+                                            if (isAvailable) {
+                                                selectedTableId = table.id
+                                                selectedTableNumber = table.table_number
+                                            } else {
+                                                AppToast.warning("Bàn này đã có người đặt hoặc đang dùng")
+                                            }
+                                        }
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(8.dp).alpha(alphaVal),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Text(table.table_number, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (isSelected) WarmBrown else Color.DarkGray)
+                                            Text("${table.capacity} khách", fontSize = 11.sp, color = Color.Gray)
+                                            Spacer(Modifier.height(4.dp))
+                                            
+                                            val statusText = when {
+                                                isAvailable -> "Trống"
+                                                isReserved -> "Đã đặt"
+                                                else -> "Đang dùng"
+                                            }
+                                            Text(statusText, fontSize = 10.sp, color = statusColor, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                                // Fill empty spaces if row has less than 3 items
+                                repeat(3 - rowTables.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }

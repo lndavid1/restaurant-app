@@ -49,7 +49,7 @@ fun MenuScanResultScreen(
     restaurantViewModel: RestaurantViewModel,
     adminToken: String,
     onBack: () -> Unit,
-    onScanAgain: (Uri) -> Unit
+    onScanAgain: (List<Uri>) -> Unit
 ) {
     val context = LocalContext.current
     val scanState by scanViewModel.scanState.collectAsState()
@@ -59,9 +59,9 @@ fun MenuScanResultScreen(
 
     // Picker ảnh
     val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) onScanAgain(uri)
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) onScanAgain(uris)
     }
 
     Scaffold(
@@ -156,8 +156,20 @@ fun MenuScanResultScreen(
 
             is MenuScanViewModel.ScanState.Success -> {
                 // Dùng SnapshotStateList để chỉ recompose đúng item thay đổi
-                val editableItems: SnapshotStateList<com.example.restaurant.data.model.ScannedMenuItem> =
-                    remember(state.items) { state.items.toMutableStateList() }
+                val editableItems = remember { mutableStateListOf<com.example.restaurant.data.model.ScannedMenuItem>() }
+                
+                LaunchedEffect(state.items) {
+                    if (editableItems.isEmpty()) {
+                        editableItems.addAll(state.items)
+                    } else {
+                        // Merge image_url from state.items into editableItems to avoid overwriting user edits
+                        state.items.forEachIndexed { index, newItem ->
+                            if (index < editableItems.size && editableItems[index].image_url != newItem.image_url) {
+                                editableItems[index] = editableItems[index].copy(image_url = newItem.image_url)
+                            }
+                        }
+                    }
+                }
 
                 Column(
                     modifier = Modifier
@@ -232,7 +244,9 @@ fun MenuScanResultScreen(
                     // Nút lưu
                     val selectedItems = editableItems.filter { it.isSelected && it.name.isNotBlank() }
                     Surface(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding(),
                         color = Color.White,
                         shadowElevation = 8.dp
                     ) {
@@ -255,11 +269,11 @@ fun MenuScanResultScreen(
                                                 image_url = scanned.image_url,
                                                 recipe = scanned.recipe
                                             )
-                                            restaurantViewModel.addProduct(adminToken, product)
+                                            restaurantViewModel.addProduct(adminToken, product, showToast = false)
                                             savedCount++
                                         }
                                     } else {
-                                        restaurantViewModel.addCategory(catName) { newCat ->
+                                        restaurantViewModel.addCategory(catName, showToast = false) { newCat ->
                                             itemsInCategory.forEach { scanned ->
                                                 val product = Product(
                                                     id = 0,
@@ -271,13 +285,13 @@ fun MenuScanResultScreen(
                                                     image_url = scanned.image_url,
                                                     recipe = scanned.recipe
                                                 )
-                                                restaurantViewModel.addProduct(adminToken, product)
+                                                restaurantViewModel.addProduct(adminToken, product, showToast = false)
                                             }
                                         }
                                         savedCount += itemsInCategory.size
                                     }
                                 }
-                                Toast.makeText(context, "✅ Đã thêm $savedCount món vào thực đơn!", Toast.LENGTH_SHORT).show()
+                                AppToast.success("✅ Đã thêm $savedCount món vào thực đơn!")
                                 scanViewModel.resetState()
                                 onBack()
                             },

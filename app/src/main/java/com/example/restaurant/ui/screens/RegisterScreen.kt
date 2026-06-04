@@ -172,16 +172,7 @@ fun RegisterScreen(
                         }
                     }
 
-                    if (authState is AuthState.Error) {
-                        Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFFFEBEE)) {
-                            Text(
-                                text = (authState as AuthState.Error).message,
-                                color = Color(0xFFD32F2F),
-                                modifier = Modifier.padding(12.dp),
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
+
                 }
             }
 
@@ -217,9 +208,16 @@ fun RegisterScreen(
     }
 
     LaunchedEffect(authState) {
-        if (authState is AuthState.Success) {
-            val successState = authState as AuthState.Success
-            onRegisterSuccess(successState.token, successState.role)
+        when (authState) {
+            is AuthState.Success -> {
+                val successState = authState as AuthState.Success
+                AppToast.success("Đăng ký thành công!")
+                onRegisterSuccess(successState.token, successState.role)
+            }
+            is AuthState.Error -> {
+                AppToast.error((authState as AuthState.Error).message)
+            }
+            else -> {}
         }
     }
 }

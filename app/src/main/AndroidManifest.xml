@@ -44,6 +44,17 @@
                     android:host="payment"
                     android:scheme="restaurantapp" />
             </intent-filter>
+
+            <!-- Deep Link bắt URL từ trình duyệt quay lại app sau khi thanh toán VNPAY -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="lndavid1.github.io"
+                    android:pathPrefix="/repay/vnpay_return.html"
+                    android:scheme="https" />
+            </intent-filter>
         </activity>
 
         <service

@@ -53,4 +53,29 @@ class NotificationRepository {
             false
         }
     }
+
+    suspend fun deleteNotification(notificationId: String): Boolean {
+        return try {
+            notificationsCollection.document(notificationId).delete().await()
+            true
+        } catch (e: Exception) {
+            Log.e("NotificationRepo", "Error deleting notification", e)
+            false
+        }
+    }
+
+    suspend fun deleteAllUserNotifications(userId: String): Boolean {
+        return try {
+            val snapshot = notificationsCollection.whereEqualTo("user_id", userId).get().await()
+            db.runBatch { batch ->
+                for (doc in snapshot.documents) {
+                    batch.delete(doc.reference)
+                }
+            }.await()
+            true
+        } catch (e: Exception) {
+            Log.e("NotificationRepo", "Error deleting all notifications", e)
+            false
+        }
+    }
 }

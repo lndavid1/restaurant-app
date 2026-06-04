@@ -138,15 +138,15 @@ class RestaurantViewModel : ViewModel() {
         }
     }
 
-    fun addCategory(name: String, onCategoryAdded: (Category) -> Unit) {
+    fun addCategory(name: String, showToast: Boolean = true, onCategoryAdded: (Category) -> Unit) {
         viewModelScope.launch {
             val newCat = repository.addCategory(name)
             if (newCat != null) {
-                _toastMessage.emit("Đã thêm danh mục mới")
+                if (showToast) _toastMessage.emit("Đã thêm danh mục mới")
                 fetchCategories()
                 onCategoryAdded(newCat)
             } else {
-                _toastMessage.emit("Lỗi: Không thể thêm danh mục")
+                if (showToast) _toastMessage.emit("Lỗi: Không thể thêm danh mục")
             }
         }
     }
@@ -369,10 +369,10 @@ class RestaurantViewModel : ViewModel() {
         val ingMap = _ingredients.value.associateBy { it.id.toString() }
         return calculateStockStatus(product, ingMap)
     }
-    fun addProduct(token: String, product: Product) {
+    fun addProduct(token: String, product: Product, showToast: Boolean = true) {
         viewModelScope.launch {
             if (repository.addProduct(product)) {
-                _toastMessage.emit("Đã thêm món mới")
+                if (showToast) _toastMessage.emit("Đã thêm món mới")
                 // SSOT observer tự cập nhật — không cần fetchProducts()
             }
         }
@@ -446,10 +446,10 @@ class RestaurantViewModel : ViewModel() {
                 }
         }
     }
-    fun addIngredient(item: Ingredient) {
+    fun addIngredient(item: Ingredient, showToast: Boolean = true) {
         viewModelScope.launch {
             if (repository.addIngredient(item)) {
-                _toastMessage.emit("Đã thêm nguyên liệu")
+                if (showToast) _toastMessage.emit("Đã thêm nguyên liệu")
             }
         }
     }

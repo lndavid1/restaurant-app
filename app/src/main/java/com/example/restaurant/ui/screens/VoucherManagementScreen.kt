@@ -54,7 +54,7 @@ fun VoucherManagementScreen(
 
     LaunchedEffect(Unit) {
         viewModel.toastMessage.collectLatest { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            AppToast.info(msg)
         }
     }
 

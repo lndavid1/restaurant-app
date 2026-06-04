@@ -147,14 +147,14 @@ class IngredientScanViewModel(application: Application) : AndroidViewModel(appli
     // =====================================================
     // SCAN INGREDIENTS — Core function
     // =====================================================
-    fun scanIngredientImage(uri: Uri, existingIngredients: List<Ingredient>, context: Context) {
+    fun scanIngredientImages(uris: List<Uri>, existingIngredients: List<Ingredient>, context: Context) {
         viewModelScope.launch {
             _scanState.value = ScanState.Loading("Đang chuẩn bị ảnh... 🖼️")
             var loadingJob: kotlinx.coroutines.Job? = null
             try {
                 // B1: Resize ảnh
-                val bitmap = resizeBitmapForAI(uri, context)
-                    ?: throw Exception("Không thể đọc ảnh. Vui lòng thử lại.")
+                val bitmaps = uris.mapNotNull { resizeBitmapForAI(it, context) }
+                if (bitmaps.isEmpty()) throw Exception("Không thể đọc ảnh. Vui lòng thử lại.")
                 
                 // Dynamic feedback
                 loadingJob = launch {
@@ -203,7 +203,7 @@ Quy tắc:
                 val response = withTimeout(120000) {
                     model.generateContent(
                         content {
-                            image(bitmap)
+                            bitmaps.forEach { image(it) }
                             text(prompt)
                         }
                     )

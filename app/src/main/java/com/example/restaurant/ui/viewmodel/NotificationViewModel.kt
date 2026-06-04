@@ -45,4 +45,16 @@ class NotificationViewModel : ViewModel() {
             repository.createNotification(notif)
         }
     }
+
+    fun deleteNotification(notificationId: String) {
+        viewModelScope.launch {
+            repository.deleteNotification(notificationId)
+        }
+    }
+
+    fun deleteAllNotifications(userId: String) {
+        viewModelScope.launch {
+            repository.deleteAllUserNotifications(userId)
+        }
+    }
 }

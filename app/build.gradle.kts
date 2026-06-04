@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.restaurant"
         minSdk = 24
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.8"
+        versionCode = 13
+        versionName = "1.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -92,7 +92,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
-    debugImplementation("com.google.firebase:firebase-appcheck-debug") // App Check debug provider
+    debugImplementation("com.google.firebase:firebase-appcheck-debug")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -102,6 +102,10 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
+
+
+
+
 
 
 

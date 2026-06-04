@@ -10,8 +10,8 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 object VNPayHelper {
-    const val vnp_TmnCode = "76ZQ6FFU" 
-    const val vnp_HashSecret = "V6828R5P1ER686DVT7TGBG78KXAZV9W9" 
+    const val vnp_TmnCode = "2IGPRBPA" 
+    const val vnp_HashSecret = "GVO7FN52AF1TIZD73F14RJTH1K0QWV8K" 
     const val vnp_Url = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
     const val vnp_ReturnUrl = "https://lndavid1.github.io/repay/vnpay_return.html" 
 

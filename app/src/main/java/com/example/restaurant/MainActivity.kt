@@ -11,7 +11,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -37,6 +40,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        handleIntent(intent)
     }
 
     /**
@@ -48,6 +52,36 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val uri = intent?.data
+        if (uri != null) {
+            if (uri.host == "lndavid1.github.io" && uri.path?.contains("vnpay_return.html") == true) {
+                val responseCode = uri.getQueryParameter("vnp_ResponseCode")
+                val orderIdStr = uri.getQueryParameter("vnp_TxnRef")
+                if (responseCode == "00" && orderIdStr != null) {
+                    val orderId = orderIdStr.toIntOrNull()
+                    if (orderId != null) {
+                        val prefs = getSharedPreferences("restaurant_session", Context.MODE_PRIVATE)
+                        val token = prefs.getString("user_token", "") ?: ""
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            try {
+                                com.example.restaurant.data.repository.RestaurantRepository().checkoutOrder(token, orderId)
+                                launch(Dispatchers.Main) {
+                                    android.widget.Toast.makeText(this@MainActivity, "Thanh toán VNPAY thành công!", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                } else if (responseCode != null && responseCode != "00") {
+                    android.widget.Toast.makeText(this, "Thanh toán VNPAY thất bại hoặc bị huỷ", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 }
 
@@ -90,7 +124,8 @@ fun RestaurantApp() {
         }
     }
 
-    NavHost(navController = navController, startDestination = startDest) {
+    androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+        NavHost(navController = navController, startDestination = startDest) {
         composable(Screen.Splash.route) {
             SplashScreen(onNext = {
                 navController.navigate(Screen.Login.route) { popUpTo(Screen.Splash.route) { inclusive = true } }
@@ -332,6 +367,7 @@ fun RestaurantApp() {
                     token = token,
                     authViewModel = authViewModel,
                     reservationViewModel = reservationViewModel,
+                    restaurantViewModel = restaurantViewModel,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -362,4 +398,8 @@ fun RestaurantApp() {
             )
         }
     }
+        // Global toast host — hiển thị trên tất cả màn hình
+        AppToastHost()
+    }
 }
+

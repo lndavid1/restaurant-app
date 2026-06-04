@@ -82,7 +82,7 @@ fun ChatbotScreen(
                 val productToAdd = products.find { it.id == productId }
                 if (productToAdd != null) {
                     restaurantViewModel.addToCart(productToAdd)
-                    Toast.makeText(context, "Đã tự động thêm ${productToAdd.name} vào giỏ hàng!", Toast.LENGTH_SHORT).show()
+                    AppToast.success("Đã tự động thêm ${productToAdd.name} vào giỏ hàng!")
                 }
             }
         }
@@ -90,10 +90,10 @@ fun ChatbotScreen(
             chatViewModel.placeOrderEvents.collect {
                 if (token != null && restaurantViewModel.cartItems.value.isNotEmpty()) {
                     restaurantViewModel.placeOrder(token, activeTableId) {
-                        Toast.makeText(context, "Đã gửi đơn báo bếp thành công!", Toast.LENGTH_LONG).show()
+                        AppToast.success("Đã gửi đơn báo bếp thành công!")
                     }
                 } else if (restaurantViewModel.cartItems.value.isEmpty()) {
-                    Toast.makeText(context, "Giỏ hàng hiện đang trống!", Toast.LENGTH_SHORT).show()
+                    AppToast.warning("Giỏ hàng hiện đang trống!")
                 }
             }
         }

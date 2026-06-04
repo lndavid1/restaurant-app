@@ -43,16 +43,16 @@ fun IngredientScanResultScreen(
     scanViewModel: IngredientScanViewModel,
     restaurantViewModel: RestaurantViewModel,
     onBack: () -> Unit,
-    onScanAgain: (Uri) -> Unit
+    onScanAgain: (List<Uri>) -> Unit
 ) {
     val context = LocalContext.current
     val scanState by scanViewModel.scanState.collectAsState()
     val allIngredients by restaurantViewModel.ingredients.collectAsState()
 
     val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) onScanAgain(uri)
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) onScanAgain(uris)
     }
 
     Scaffold(
@@ -204,7 +204,13 @@ fun IngredientScanResultScreen(
                     }
 
                     val selectedItems = editableItems.filter { it.isSelected && it.name.isNotBlank() }
-                    Surface(color = Color.White, shadowElevation = 8.dp) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding(),
+                        color = Color.White,
+                        shadowElevation = 8.dp
+                    ) {
                         Button(
                             onClick = {
                                 var savedCount = 0
@@ -217,10 +223,10 @@ fun IngredientScanResultScreen(
                                         stock = scanned.stock,
                                         updated_at = null
                                     )
-                                    restaurantViewModel.addIngredient(ingredient)
+                                    restaurantViewModel.addIngredient(ingredient, showToast = false)
                                     savedCount++
                                 }
-                                Toast.makeText(context, "✅ Đã lưu $savedCount nguyên liệu vào kho!", Toast.LENGTH_SHORT).show()
+                                AppToast.success("✅ Đã lưu $savedCount nguyên liệu vào kho!")
                                 scanViewModel.resetState()
                                 onBack()
                             },

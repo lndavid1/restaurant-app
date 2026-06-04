@@ -6,11 +6,6 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object PayOSWorkerClient {
-    /**
-     * *** THAY URL NÀY sau khi deploy Worker ***
-     * Sau khi chạy: wrangler deploy
-     * URL sẽ có dạng: https://payos-payment.<ten-tai-khoan>.workers.dev/
-     */
     private const val BASE_URL = "https://payos-payment.vmc0886165119.workers.dev/"
 
     private val logging = HttpLoggingInterceptor().apply {

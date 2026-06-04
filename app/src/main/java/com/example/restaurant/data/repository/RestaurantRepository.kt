@@ -421,18 +421,29 @@ class RestaurantRepository {
             val updateData = mutableMapOf<String, Any>(
                 "payment_status" to "requested"
             )
-            if (pointsUsed > 0) {
-                val orderRef = firestore.collection("orders").document(orderId.toString())
-                val orderSnapshot = orderRef.get().await()
-                if (orderSnapshot.exists()) {
-                    val currentDiscount = orderSnapshot.getDouble("discount_amount") ?: 0.0
-                    val currentPoints = orderSnapshot.getLong("points_used") ?: 0L
+            
+            val orderRef = firestore.collection("orders").document(orderId.toString())
+            val orderSnapshot = orderRef.get().await()
+            
+            if (orderSnapshot.exists()) {
+                val currentTotal = orderSnapshot.getDouble("total_amount") ?: 0.0
+                val currentDiscount = orderSnapshot.getDouble("discount_amount") ?: 0.0
+                val currentPoints = orderSnapshot.getLong("points_used") ?: 0L
+
+                val finalTotal = maxOf(0.0, currentTotal - discountAmount)
+
+                if (discountAmount > 0.0 || pointsUsed > 0) {
                     updateData["discount_amount"] = currentDiscount + discountAmount
                     updateData["points_used"] = currentPoints + pointsUsed
+                    updateData["total_amount"] = finalTotal
                 }
+            }
+
+            if (pointsUsed > 0) {
                 firestore.collection("users").document(token)
                     .update("loyaltyPoints", com.google.firebase.firestore.FieldValue.increment(-pointsUsed.toLong())).await()
             }
+            
             firestore.collection("orders").document(orderId.toString())
                 .update(updateData).await()
             true

@@ -37,21 +37,23 @@ fun ChangePasswordDialog(
     var step by remember { mutableStateOf(1) } // 1: Info, 2: OTP & New Pass
     var countdown by remember { mutableStateOf(0) }
     var inputOtp by remember { mutableStateOf("") }
+    var currentPass by remember { mutableStateOf("") }
     var newPass by remember { mutableStateOf("") }
     var confirmPass by remember { mutableStateOf("") }
-    var lockErrorMsg by remember { mutableStateOf<String?>(null) } 
+    var lockErrorMsg by remember { mutableStateOf<String?>(null) }
+    var otpSentCount by remember { mutableStateOf(0) } // Track số lần gửi OTP để bắt re-trigger countdown
 
     val otpState by authViewModel.otpState.collectAsState()
     val changePasswordState by authViewModel.changePasswordState.collectAsState()
 
-    LaunchedEffect(otpState) {
+    LaunchedEffect(otpState, otpSentCount) {
         when (otpState) {
             is AuthState.Success -> {
                 val otpResp = otpState as AuthState.Success
                 if (otpResp.role == "otp_sent") {
                     step = 2
                     countdown = 60
-                    Toast.makeText(context, "Mã OTP đã được gửi tới Email của bạn!", Toast.LENGTH_SHORT).show()
+                    AppToast.success("Mã OTP đã được gửi tới Email của bạn!")
                 }
             }
             is AuthState.Error -> {
@@ -59,7 +61,7 @@ fun ChangePasswordDialog(
                 if (err.contains("sai quá 5 lần") || err.contains("khóa tạm thời")) {
                     lockErrorMsg = "Bạn đã nhập sai quá 5 lần. Vui lòng thử lại sau 5 phút."
                 } else {
-                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                    AppToast.error(err)
                 }
             }
             else -> {}
@@ -69,7 +71,7 @@ fun ChangePasswordDialog(
     LaunchedEffect(changePasswordState) {
         when (changePasswordState) {
             is AuthState.Success -> {
-                Toast.makeText(context, "Đổi mật khẩu thành công!", Toast.LENGTH_SHORT).show()
+                AppToast.success("Đổi mật khẩu thành công!")
                 authViewModel.resetOtpStates()
                 onDismiss()
             }
@@ -78,7 +80,7 @@ fun ChangePasswordDialog(
                 if (err.contains("sai quá 5 lần")) {
                     lockErrorMsg = "Bạn đã nhập sai quá 5 lần. Vui lòng thử lại sau 5 phút."
                 } else {
-                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                    AppToast.error(err)
                 }
             }
             else -> {}
@@ -162,6 +164,15 @@ fun ChangePasswordDialog(
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     OutlinedTextField(
+                        value = currentPass,
+                        onValueChange = { currentPass = it },
+                        label = { Text("Mật khẩu hiện tại") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
                         value = newPass,
                         onValueChange = { newPass = it },
                         label = { Text("Mật khẩu mới") },
@@ -190,7 +201,9 @@ fun ChangePasswordDialog(
                             fontSize = 14.sp, 
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.clickable {
+                                authViewModel.resetOtpStates()
                                 authViewModel.requestPasswordChangeOTP(uid)
+                                otpSentCount++
                             }.padding(4.dp)
                         )
                     }
@@ -207,18 +220,22 @@ fun ChangePasswordDialog(
                         Button(
                             onClick = {
                                 if (inputOtp.length != 6) {
-                                    Toast.makeText(context, "Vui lòng nhập đủ 6 số OTP", Toast.LENGTH_SHORT).show()
+                                    AppToast.warning("Vui lòng nhập đủ 6 số OTP")
+                                    return@Button
+                                }
+                                if (currentPass.isEmpty()) {
+                                    AppToast.warning("Vui lòng nhập mật khẩu hiện tại")
                                     return@Button
                                 }
                                 if (newPass.length < 6) {
-                                    Toast.makeText(context, "Mật khẩu phải từ 6 ký tự", Toast.LENGTH_SHORT).show()
+                                    AppToast.warning("Mật khẩu phải từ 6 ký tự")
                                     return@Button
                                 }
                                 if (newPass != confirmPass) {
-                                    Toast.makeText(context, "Mật khẩu không khớp", Toast.LENGTH_SHORT).show()
+                                    AppToast.error("Mật khẩu không khớp")
                                     return@Button
                                 }
-                                authViewModel.verifyOTPAndChangePassword(uid, inputOtp, newPass)
+                                authViewModel.verifyOTPAndChangePassword(uid, inputOtp, currentPass, newPass)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = WarmBrown),
                             enabled = changePasswordState !is AuthState.Loading

@@ -40,11 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.viewinterop.AndroidView
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.webkit.WebChromeClient
-import android.view.ViewGroup
 import coil.compose.AsyncImage
 import com.example.restaurant.ui.theme.CreamBG
 import com.example.restaurant.ui.theme.StatusGreen
@@ -117,60 +112,11 @@ fun CustomerDashboardScreen(
         }
     }
     
-    // WebView được khởi tạo lazy — chỉ tạo khi tab "Giới thiệu" (index 2) được mở
-    // DisposableEffect sẽ destroy đúng cách khi tab thay đổi — tránh memory leak
-    var mapWebView by remember { mutableStateOf<WebView?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     DisposableEffect(Unit) {
         onDispose {
             restaurantViewModel.stopPayOSPolling()
-        }
-    }
-
-    DisposableEffect(selectedTab) {
-        if (selectedTab == 2) {
-            val wv = WebView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.setSupportZoom(true)
-                webViewClient = WebViewClient()
-                webChromeClient = WebChromeClient()
-                val htmlContent = """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-                        <style>
-                            body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-                            iframe { border: 0; width: 100%; height: 100%; }
-                        </style>
-                    </head>
-                    <body>
-                        <iframe 
-                            src="https://maps.google.com/maps?q=Tr%C6%B0%E1%BB%9Dng+%C4%90%E1%BA%A1i+h%E1%BB%8Dc+C%C3%B4ng+ngh%E1%BB%87+th%C3%B4ng+tin+v%C3%A0+Truy%E1%BB%81n+th%C3%B4ng+(ICTU),+Th%C3%A1i+Nguy%C3%AAn&t=&z=16&ie=UTF8&iwloc=&output=embed"
-                            allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade">
-                        </iframe>
-                    </body>
-                    </html>
-                """.trimIndent()
-                loadDataWithBaseURL("https://www.google.com", htmlContent, "text/html", "UTF-8", null)
-            }
-            mapWebView = wv
-        }
-        onDispose {
-            // Full combo destroy — tránh RAM leak âm thầm
-            mapWebView?.apply {
-                stopLoading()
-                clearHistory()
-                removeAllViews()
-                destroy()
-            }
-            mapWebView = null
         }
     }
 
@@ -208,7 +154,7 @@ fun CustomerDashboardScreen(
                         onRequestPayment = onRequestPayment,
                         snackbarHostState = snackbarHostState
                     )
-                    2 -> AboutTab(mapWebView = mapWebView)
+                    2 -> AboutTab()
                     3 -> SettingsTab(
                         token = token,
                         authViewModel = authViewModel,
@@ -1147,7 +1093,14 @@ fun HomeTab(
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp).heightIn(max = 500.dp)) {
-                Text("Thông báo của bạn", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Thông báo của bạn", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    if (notifications.isNotEmpty()) {
+                        IconButton(onClick = { notificationViewModel.deleteAllNotifications(token) }) {
+                            Icon(Icons.Default.DeleteSweep, contentDescription = "Xóa tất cả", tint = StatusRed)
+                        }
+                    }
+                }
                 Spacer(Modifier.height(16.dp))
                 if (notifications.isEmpty()) {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -1162,20 +1115,48 @@ fun HomeTab(
                                 "warning" -> StatusRed
                                 else -> Color(0xFF2196F3)
                             }
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = bgColor,
-                                modifier = Modifier.fillMaxWidth().clickable { 
-                                    if (!notif.is_read) notificationViewModel.markAsRead(notif.id) 
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { dismissValue ->
+                                    if (dismissValue == SwipeToDismissBoxValue.EndToStart || dismissValue == SwipeToDismissBoxValue.StartToEnd) {
+                                        notificationViewModel.deleteNotification(notif.id)
+                                        true
+                                    } else false
                                 }
+                            )
+
+                            SwipeToDismissBox(
+                                state = dismissState,
+                                backgroundContent = {
+                                    val color = StatusRed.copy(alpha = 0.8f)
+                                    val alignment = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
+                                    Box(
+                                        Modifier
+                                            .fillMaxSize()
+                                            .background(color, RoundedCornerShape(12.dp))
+                                            .padding(horizontal = 20.dp),
+                                        contentAlignment = alignment
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Xóa", tint = Color.White)
+                                    }
+                                },
+                                enableDismissFromStartToEnd = true,
+                                enableDismissFromEndToStart = true
                             ) {
-                                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
-                                    Icon(Icons.Default.Notifications, null, tint = iconColor, modifier = Modifier.size(24.dp))
-                                    Spacer(Modifier.width(12.dp))
-                                    Column {
-                                        Text(notif.title, fontWeight = if (notif.is_read) FontWeight.Normal else FontWeight.Bold, fontSize = 15.sp)
-                                        Spacer(Modifier.height(4.dp))
-                                        Text(notif.body, color = Color.DarkGray, fontSize = 13.sp)
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = bgColor,
+                                    modifier = Modifier.fillMaxWidth().clickable { 
+                                        if (!notif.is_read) notificationViewModel.markAsRead(notif.id) 
+                                    }
+                                ) {
+                                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+                                        Icon(Icons.Default.Notifications, null, tint = iconColor, modifier = Modifier.size(24.dp))
+                                        Spacer(Modifier.width(12.dp))
+                                        Column {
+                                            Text(notif.title, fontWeight = if (notif.is_read) FontWeight.Normal else FontWeight.Bold, fontSize = 15.sp)
+                                            Spacer(Modifier.height(4.dp))
+                                            Text(notif.body, color = Color.DarkGray, fontSize = 13.sp)
+                                        }
                                     }
                                 }
                             }
@@ -2421,114 +2402,149 @@ fun SettingsTab(token: String, authViewModel: AuthViewModel, onNavigateToOrderHi
 }
 
 @Composable
-fun AboutTab(mapWebView: WebView?) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()) // Thêm vuốt dọc cho màn hình nhỏ
-            .padding(horizontal = 20.dp)
-            .padding(top = 24.dp, bottom = 100.dp)
+fun AboutTab() {
+    val context = LocalContext.current
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp)
     ) {
-        Text("About Me", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            color = Color.White,
-            shadowElevation = 8.dp
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(androidx.compose.ui.graphics.Brush.linearGradient(
-                        colors = listOf(Color.White, Color(0xFFFFF3E0))
-                    ))
+        item {
+            Text("Giới thiệu", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Thông tin về nhà hàng và nhà phát triển", fontSize = 13.sp, color = Color.Gray)
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = Color.White,
+                shadowElevation = 8.dp
             ) {
-                Column(modifier = Modifier.padding(24.dp)) {
-                    Text("DEV: Vũ Minh Chuyên", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = WarmBrown)
-                    Text("Class: CNTTK21D", fontSize = 14.sp, color = Color.DarkGray, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Row(verticalAlignment = Alignment.Top) {
-                        Surface(shape = CircleShape, color = WarmBrown.copy(alpha=0.1f), modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Default.LocationOn, null, tint = WarmBrown, modifier = Modifier.padding(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = listOf(Color.White, Color(0xFFFFF3E0))
+                            )
+                        )
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Surface(shape = RoundedCornerShape(10.dp), color = WarmBrown.copy(alpha = 0.1f)) {
+                            Text("👨\u200d💻 NHÀ PHÁT TRIỂN", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = WarmBrown, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("Địa chỉ", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                            Text("Đường Z115, X. Quyết Thắng\nTP. Thái Nguyên", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A2E))
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text("Vũ Minh Chuyên", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = WarmBrown)
+                        Text("CNTTK21D — ĐH CNTT & TT Thái Nguyên", fontSize = 13.sp, color = Color.DarkGray, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        androidx.compose.material3.Divider(color = Color(0xFFF0EDE8), thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(verticalAlignment = Alignment.Top) {
+                            Surface(shape = CircleShape, color = WarmBrown.copy(alpha = 0.1f), modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.LocationOn, null, tint = WarmBrown, modifier = Modifier.padding(8.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Địa chỉ", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                                Text("Đường Z115, X. Quyết Thắng\nTP. Thái Nguyên", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A2E))
+                            }
                         }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(shape = CircleShape, color = Color(0xFF1976D2).copy(alpha=0.1f), modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Default.Language, null, tint = Color(0xFF1976D2), modifier = Modifier.padding(8.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(shape = CircleShape, color = Color(0xFF1976D2).copy(alpha = 0.1f), modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.Language, null, tint = Color(0xFF1976D2), modifier = Modifier.padding(8.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Website", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                                Text("tuyensinh.ictu.edu.vn", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A2E))
+                            }
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("Website", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                            Text("tuyensinh.ictu.edu.vn", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A2E))
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(shape = CircleShape, color = Color(0xFF4267B2).copy(alpha=0.1f), modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Default.Facebook, null, tint = Color(0xFF4267B2), modifier = Modifier.padding(8.dp))
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("Fanpage", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                            Text("Đại học CNTT & TT Thái Nguyên", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A2E))
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(shape = CircleShape, color = Color(0xFF4267B2).copy(alpha = 0.1f), modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.Facebook, null, tint = Color(0xFF4267B2), modifier = Modifier.padding(8.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Fanpage", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                                Text("Đại học CNTT & TT Thái Nguyên", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A2E))
+                            }
                         }
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Bản đồ vị trí", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
-            Spacer(modifier = Modifier.weight(1f))
-            Icon(Icons.Default.Map, null, tint = WarmBrown)
-        }
-        Spacer(modifier = Modifier.height(12.dp))
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Vị trí nhà hàng", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
+                Spacer(modifier = Modifier.weight(1f))
+                Icon(Icons.Default.Map, null, tint = WarmBrown)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
 
-        if (mapWebView != null) {
+            // Thẻ bản đồ — nhấn để mở Google Maps qua Intent (không dùng WebView)
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(350.dp),
-                shape = RoundedCornerShape(24.dp),
-                shadowElevation = 8.dp,
-                border = BorderStroke(2.dp, Color.White)
-            ) {
-                AndroidView(
-                    factory = {
-                        mapWebView.apply {
-                            (parent as? ViewGroup)?.removeView(this)
+                    .clickable {
+                        val geoUri = Uri.parse("geo:21.5665,105.8248?q=Trường+Đại+học+CNTT+và+Truyền+thông+ICTU+Thái+Nguyên")
+                        val mapIntent = Intent(Intent.ACTION_VIEW, geoUri).apply {
+                            setPackage("com.google.android.apps.maps")
+                        }
+                        val browserUri = Uri.parse("https://maps.google.com/maps?q=Trường+Đại+học+CNTT+và+Truyền+thông+ICTU+Thái+Nguyên")
+                        val fallback = Intent(Intent.ACTION_VIEW, browserUri)
+                        try {
+                            context.startActivity(mapIntent)
+                        } catch (e: Exception) {
+                            context.startActivity(fallback)
                         }
                     },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        } else {
-            // Placeholder khi WebView chưa load
-            Surface(
-                modifier = Modifier.fillMaxWidth().height(350.dp),
                 shape = RoundedCornerShape(24.dp),
-                color = Color(0xFFF0EDE8)
+                shadowElevation = 8.dp,
+                color = Color.White
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = listOf(Color(0xFFE8F5E9), Color(0xFFE3F2FD))
+                            )
+                        )
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Map, null, tint = WarmBrown.copy(alpha = 0.4f), modifier = Modifier.size(48.dp))
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Đang tải bản đồ...", color = Color.Gray, fontSize = 14.sp)
+                        Surface(shape = CircleShape, color = Color.White, shadowElevation = 6.dp, modifier = Modifier.size(72.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Map, null, tint = Color(0xFF1976D2), modifier = Modifier.size(36.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Xem trên Google Maps", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("Đường Z115, X. Quyết Thắng, TP. Thái Nguyên", fontSize = 13.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF1976D2)) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.Navigation, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Text("Chỉ đường", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            }
+                        }
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(100.dp))
         }
     }
 }

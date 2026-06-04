@@ -12,7 +12,9 @@ data class Reservation(
     val guest_count: Int = 2,
     val note: String = "",
     val status: String = "pending", // pending | confirmed | cancelled | completed
-    val created_at: Long = System.currentTimeMillis()
+    val created_at: Long = System.currentTimeMillis(),
+    val table_id: Int? = null,
+    val table_number: String? = null
 )
 
 data class NotificationMessage(
