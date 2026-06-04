@@ -1320,7 +1320,7 @@ fun NotificationsTab(
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 // Actions Row
-                                if (order.order_status == "pending") {
+                                if (order.order_status == "pending" && order.payment_status == "unpaid") {
                                     Button(
                                         onClick = { editingOrder = order },
                                         modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -1331,6 +1331,22 @@ fun NotificationsTab(
                                         Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = WarmBrown)
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text("Chỉnh sửa yêu cầu", color = WarmBrown, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                                    }
+                                } else if (order.order_status == "pending" && order.payment_status != "unpaid") {
+                                    // Hiển thị trạng thái khóa khi đã xác nhận thanh toán
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = Color(0xFFF5F5F5)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Lock, null, modifier = Modifier.size(18.dp), tint = Color.Gray)
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text("Đã xác nhận thanh toán - Không thể chỉnh sửa", fontSize = 13.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                                        }
                                     }
                                 }
                                 

@@ -864,6 +864,7 @@ fun EmployeePaymentTab(
     onVnPayClick: (Order) -> Unit
 ) {
     var confirmingOrder by remember { mutableStateOf<Order?>(null) }
+    var previewInvoiceOrder by remember { mutableStateOf<Order?>(null) }
 
     if (confirmingOrder != null) {
         AlertDialog(
@@ -1175,6 +1176,20 @@ fun EmployeePaymentTab(
                                     }
                                 }
                             }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            // Nút xem hóa đơn - hiển thị cho tất cả đơn
+                            OutlinedButton(
+                                onClick = { previewInvoiceOrder = order },
+                                modifier = Modifier.fillMaxWidth().height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.5.dp, WarmBrown.copy(alpha = 0.6f))
+                            ) {
+                                Icon(Icons.Default.ReceiptLong, contentDescription = null, modifier = Modifier.size(16.dp), tint = WarmBrown)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Xem trước hóa đơn", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = WarmBrown)
+                            }
                             }
                         }
                     }
@@ -1182,6 +1197,14 @@ fun EmployeePaymentTab(
                 item { Spacer(Modifier.height(80.dp)) }
             }
         }
+    }
+
+    // Preview hóa đơn cho nhân viên
+    if (previewInvoiceOrder != null) {
+        EmployeeInvoiceSheet(
+            order = previewInvoiceOrder!!,
+            onDismiss = { previewInvoiceOrder = null }
+        )
     }
 }
 
@@ -1450,6 +1473,195 @@ fun TableCircleView(table: RestaurantTable, orders: List<Order> = emptyList(), o
                         Text("🔔 GỌI PHỤC VỤ", fontSize = 10.sp, color = Color.Red, fontWeight = FontWeight.Bold)
                     }
                 }
+            }
+        }
+    }
+}
+
+// =====================================================
+// HÓA ĐƠN XEM TRƯỚC CHO NHÂN VIÊN (READ-ONLY)
+// =====================================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EmployeeInvoiceSheet(
+    order: Order,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val detailItems = order.items_detail ?: emptyList()
+    val totalQty = detailItems.sumOf { it.quantity }
+    val discountAmount = order.discount_amount ?: 0.0
+    val pointsUsed = order.points_used ?: 0
+    val finalTotal = order.total_amount
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp, top = 4.dp)
+        ) {
+            // Header
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                            listOf(WarmBrown, WarmBrown.copy(alpha = 0.75f))
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    .padding(20.dp)
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.ReceiptLong, null, tint = Color.White, modifier = Modifier.size(36.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text("HÓA ĐƠN CHI TIẾT", fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color.White, letterSpacing = 2.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Mã đơn: #${order.id}", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
+                    order.table_number?.let {
+                        Text("Bàn: $it", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
+                    }
+                    Text("Khách: ${order.user_id.take(8).uppercase()}", fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f))
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            // Items list
+            Text("Danh sách món", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
+            Spacer(Modifier.height(12.dp))
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFFF7F3EE)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Header row
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Tên món", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2f))
+                        Text("SL", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(0.5f))
+                        Text("Đơn giá", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1f))
+                    }
+                    HorizontalDivider(color = Color.LightGray.copy(alpha = 0.4f))
+                    Spacer(Modifier.height(8.dp))
+                    detailItems.forEach { item ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(item.name, fontSize = 14.sp, color = Color(0xFF1A1A2E), modifier = Modifier.weight(2f), maxLines = 2)
+                            Text(
+                                "×${item.quantity}",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = WarmBrown,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.weight(0.5f)
+                            )
+                            val itemPrice = item.price ?: 0.0
+                            Text(
+                                if (itemPrice > 0) "${(itemPrice * item.quantity).toLong().toVndFormat()}đ" else "—",
+                                fontSize = 13.sp,
+                                color = Color(0xFF1A1A2E),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        HorizontalDivider(color = Color.LightGray.copy(alpha = 0.2f))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Tổng số lượng", fontSize = 13.sp, color = Color.Gray)
+                        Text("$totalQty món", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A2E))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Summary tổng tiền
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFFF7F3EE)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (discountAmount > 0.0) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Giảm giá / Điểm thưởng", fontSize = 14.sp, color = Color.Gray)
+                            Text("- ${discountAmount.toLong().toVndFormat()}đ", fontSize = 14.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    if (pointsUsed > 0) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Điểm đã dùng", fontSize = 14.sp, color = Color.Gray)
+                            Text("$pointsUsed điểm", fontSize = 14.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    HorizontalDivider(color = Color.LightGray.copy(alpha = 0.4f))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("TỔNG THANH TOÁN", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A2E))
+                        Text(
+                            "${finalTotal.toLong().toVndFormat()} ₫",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                            color = WarmBrown
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Trạng thái thanh toán
+            val payStatusColor = when (order.payment_status) {
+                "paid" -> Color(0xFF4CAF50)
+                "cash_requested" -> Color(0xFF4CAF50)
+                "online_requested" -> Color(0xFF005BAA)
+                "requested" -> Color(0xFFD9534F)
+                "payment_approved" -> Color.Gray
+                else -> Color(0xFFE5A65A)
+            }
+            val payStatusText = when (order.payment_status) {
+                "paid" -> "✓ Đã thanh toán"
+                "cash_requested" -> "💵 Tiền mặt - Nhân viên đang thu"
+                "online_requested" -> "📱 Online - Đang đồng bộ"
+                "requested" -> "⏳ Khách đã gọi thanh toán"
+                "payment_approved" -> "✅ Đã duyệt - Khách đang chọn hình thức"
+                "unpaid" -> "🕐 Chưa thanh toán"
+                else -> order.payment_status
+            }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = payStatusColor.copy(alpha = 0.1f)
+            ) {
+                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Info, null, tint = payStatusColor, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(payStatusText, fontSize = 14.sp, color = payStatusColor, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = WarmBrown)
+            ) {
+                Text("Đóng", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
             }
         }
     }
